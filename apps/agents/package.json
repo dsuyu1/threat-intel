@@ -1,0 +1,35 @@
+{
+  "name": "agents",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "run:vuln": "tsx src/agents/vuln.ts",
+    "run:exploit": "tsx src/agents/exploit.ts",
+    "run:attack": "tsx src/agents/attack.ts",
+    "run:ttp": "tsx src/agents/ttp.ts",
+    "run:malware": "tsx src/agents/malware.ts",
+    "run:all": "tsx src/run-all.ts",
+    "build": "tsc --noEmit",
+    "deploy": "serverless deploy --stage prod",
+    "deploy:dev": "serverless deploy --stage dev",
+    "invoke:vuln": "serverless invoke --function vulnAgent --stage prod",
+    "invoke:exploit": "serverless invoke --function exploitAgent --stage prod",
+    "logs:vuln": "serverless logs --function vulnAgent --tail --stage prod",
+    "logs:exploit": "serverless logs --function exploitAgent --tail --stage prod"
+  },
+  "dependencies": {
+    "@ti/db": "workspace:*",
+    "openai": "^4.47.0"
+  },
+  "devDependencies": {
+    "serverless": "^3.38.0",
+    "serverless-esbuild": "^1.52.0",
+    "@aws-sdk/client-ssm": "^3.0.0",
+    "@types/aws-lambda": "^8.10.0",
+    "esbuild": "^0.21.0",
+    "tsx": "^4.11.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}

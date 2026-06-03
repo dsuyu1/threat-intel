@@ -1,0 +1,14 @@
+# ── Clerk (contains secrets) ──────────────────────────────────────────────────
+/.clerk/
+
+# ── Local env vars (contain secrets — never commit) ───────────────────────────
+.env.local
+.env.*.local
+
+# ── Next.js build output ──────────────────────────────────────────────────────
+.next/
+out/
+
+# ── TypeScript ────────────────────────────────────────────────────────────────
+next-env.d.ts
+*.tsbuildinfo

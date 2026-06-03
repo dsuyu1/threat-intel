@@ -66,6 +66,9 @@ importers:
       d3:
         specifier: ^7.9.0
         version: 7.9.0
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@neondatabase/serverless@0.9.5)(@types/pg@8.11.6)(@types/react@19.2.16)(react@19.2.7)
       next:
         specifier: ^15.3.0
         version: 15.5.19(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -97,6 +100,9 @@ importers:
       '@types/d3':
         specifier: ^7.4.0
         version: 7.4.3
+      '@types/geojson':
+        specifier: ^7946.0.16
+        version: 7946.0.16
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.16

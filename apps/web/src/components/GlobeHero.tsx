@@ -35,6 +35,14 @@ const AGENT_COLOR_HEX: Record<string, number> = {
   malware: 0xeab308,
 };
 
+const AGENT_COLOR_CSS: Record<string, string> = {
+  vuln:    "#3b82f6",
+  attack:  "#ef4444",
+  ttp:     "#a855f7",
+  exploit: "#f97316",
+  malware: "#eab308",
+};
+
 const SEVERITY_COLOR_CSS: Record<string, string> = {
   critical: "#ef4444",
   high:     "#f97316",
@@ -401,7 +409,8 @@ function buildCountryLines(topoData: unknown): THREE.Object3D {
   // topojson-client converts TopoJSON → GeoJSON FeatureCollection correctly
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const topo = topoData as any;
-  const geojson = topojson.feature(topo, topo.objects.countries) as {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const geojson = (topojson.feature(topo, topo.objects.countries) as any) as {
     features: Array<{
       geometry: {
         type: string;

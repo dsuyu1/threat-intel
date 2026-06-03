@@ -85,7 +85,8 @@ export function ThreatMap({ findings }: Props) {
       .then((topo) => {
         // Convert TopoJSON → GeoJSON inline (avoid topojson dep)
         const { feature } = require("topojson-client") as typeof import("topojson-client");
-        const geo = feature(topo, topo.objects.countries) as FeatureCollection;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const geo = (feature(topo, topo.objects.countries) as any) as FeatureCollection;
         setWorldData(geo);
       })
       .catch(console.error);

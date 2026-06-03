@@ -71,11 +71,14 @@ export function GlobeHero({ findings }: Props) {
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const frameRef    = useRef<number>(0);
   const groupRef    = useRef<THREE.Group | null>(null);
+  const starsRef    = useRef<THREE.Points | null>(null);
   const dotsRef     = useRef<THREE.Mesh[]>([]);
 
   const isDragging  = useRef(false);
   const prevMouse   = useRef({ x: 0, y: 0 });
   const rotVelocity = useRef({ x: 0, y: 0 });
+  const zoomTarget  = useRef(6);   // desired camera Z
+  const zoomCurrent = useRef(6);   // smoothed camera Z
 
   const [popup, setPopup] = useState<Popup | null>(null);
 
@@ -110,7 +113,9 @@ export function GlobeHero({ findings }: Props) {
     scene.add(backLight);
 
     // ── Starfield (added to scene, not the rotating group) ──
-    scene.add(buildStarfield());
+    const stars = buildStarfield();
+    scene.add(stars);
+    starsRef.current = stars;
 
     // ── Globe group ──
     const group = new THREE.Group();
@@ -156,9 +161,32 @@ export function GlobeHero({ findings }: Props) {
         rotVelocity.current.y *= 0.92;
         group.rotation.x = Math.max(-0.5, Math.min(0.5, group.rotation.x));
       }
+      // Smooth zoom — lerp current Z toward target
+      zoomCurrent.current += (zoomTarget.current - zoomCurrent.current) * 0.1;
+      camera.position.z = zoomCurrent.current;
+
+      // Twinkle + subtle drift (keep zoom parallax)
+      const t = performance.now() * 0.001;
+      if (starsRef.current) {
+        starsRef.current.rotation.y = group.rotation.y * 0.12;
+        starsRef.current.rotation.x = group.rotation.x * 0.12;
+
+        const mat = starsRef.current.material as THREE.PointsMaterial;
+        const shader = mat.userData["shader"] as { uniforms?: Record<string, { value: number }> } | undefined;
+        if (shader?.uniforms?.["uTime"]) shader.uniforms["uTime"].value = t;
+      }
+
       renderer.render(scene, camera);
     };
     animate();
+
+    // ── Scroll to zoom ──
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY * 0.01;
+      zoomTarget.current = Math.max(3, Math.min(12, zoomTarget.current + delta));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
 
     // ── Resize ──
     const onResize = () => {
@@ -172,6 +200,11 @@ export function GlobeHero({ findings }: Props) {
     return () => {
       cancelAnimationFrame(frameRef.current);
       window.removeEventListener("resize", onResize);
+      el.removeEventListener("wheel", onWheel);
+      stars.geometry.dispose();
+      (stars.material as THREE.Material).dispose();
+      scene.remove(stars);
+      starsRef.current = null;
       renderer.dispose();
       el.removeChild(renderer.domElement);
     };
@@ -346,6 +379,9 @@ function buildStarfield(): THREE.Points {
   const count = 2500;
   const positions = new Float32Array(count * 3);
   const sizes = new Float32Array(count);
+  const twinkleOffset = new Float32Array(count);
+  const twinkleSpeed  = new Float32Array(count);
+  const twinkleAmp    = new Float32Array(count);
 
   for (let i = 0; i < count; i++) {
     // Distribute evenly across a large sphere shell (r = 20–50)
@@ -357,11 +393,19 @@ function buildStarfield(): THREE.Points {
     positions[i * 3 + 2] = r * Math.cos(theta);
     // Vary star sizes so some pop more than others
     sizes[i] = Math.random() < 0.05 ? 1.8 : Math.random() < 0.2 ? 1.1 : 0.6;
+
+    // Very subtle per-star twinkle
+    twinkleOffset[i] = Math.random() * Math.PI * 2;
+    twinkleSpeed[i]  = 0.3 + Math.random() * 0.9;
+    twinkleAmp[i]    = 0.04 + Math.random() * 0.06;
   }
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geo.setAttribute("size",     new THREE.BufferAttribute(sizes, 1));
+  geo.setAttribute("aSize",          new THREE.BufferAttribute(sizes, 1));
+  geo.setAttribute("aTwinkleOffset", new THREE.BufferAttribute(twinkleOffset, 1));
+  geo.setAttribute("aTwinkleSpeed",  new THREE.BufferAttribute(twinkleSpeed, 1));
+  geo.setAttribute("aTwinkleAmp",    new THREE.BufferAttribute(twinkleAmp, 1));
 
   const mat = new THREE.PointsMaterial({
     color:        0xffffff,
@@ -371,6 +415,41 @@ function buildStarfield(): THREE.Points {
     opacity:      0.85,
     depthWrite:   false,
   });
+
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms["uTime"] = { value: 0 };
+    mat.userData["shader"] = shader;
+
+    shader.vertexShader =
+      [
+        "uniform float uTime;",
+        "attribute float aSize;",
+        "attribute float aTwinkleOffset;",
+        "attribute float aTwinkleSpeed;",
+        "attribute float aTwinkleAmp;",
+        "varying float vTwinkle;",
+        "",
+      ].join("\n") + shader.vertexShader;
+
+    shader.vertexShader = shader.vertexShader.replace(
+      "void main() {",
+      "void main() {\n\tvTwinkle = 1.0 + sin(uTime * aTwinkleSpeed + aTwinkleOffset) * aTwinkleAmp;"
+    );
+
+    shader.vertexShader = shader.vertexShader.replace(
+      "gl_PointSize = size;",
+      "gl_PointSize = size * aSize;"
+    );
+
+    shader.fragmentShader =
+      ["varying float vTwinkle;", ""].join("\n") + shader.fragmentShader;
+
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "gl_FragColor = vec4( outgoingLight, diffuseColor.a );",
+      "gl_FragColor = vec4( outgoingLight, diffuseColor.a * vTwinkle );"
+    );
+  };
+  mat.customProgramCacheKey = () => "starfield-v1";
 
   return new THREE.Points(geo, mat);
 }

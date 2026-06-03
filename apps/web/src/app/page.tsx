@@ -27,7 +27,7 @@ async function getMapFindings(): Promise<MapFinding[]> {
   return rows.map(r => ({
     ...r,
     publishedAt: r.publishedAt?.toISOString() ?? null,
-    coords:      inferCoords(r.tags, r.agent),
+    coords:      inferCoords(r.tags, r.agent, r.id),
     href:        `/findings/${r.id}`,
   }));
 }

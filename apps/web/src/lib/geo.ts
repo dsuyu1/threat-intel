@@ -73,17 +73,44 @@ const SECTOR_COORDS: Record<string, [number, number]> = {
 };
 
 // Slight random jitter so overlapping dots don't stack exactly
-function jitter(base: [number, number], amount = 2): [number, number] {
+function hash32(input: string): number {
+  // FNV-1a 32-bit
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function jitter(
+  base: [number, number],
+  rand: () => number,
+  amount = 2
+): [number, number] {
   return [
-    base[0] + (Math.random() - 0.5) * amount,
-    base[1] + (Math.random() - 0.5) * amount,
+    base[0] + (rand() - 0.5) * amount,
+    base[1] + (rand() - 0.5) * amount,
   ];
 }
 
 export function inferCoords(
   tags: string | null,
-  agent: string
+  agent: string,
+  seed?: string
 ): [number, number] {
+  const rand = mulberry32(hash32(seed ?? `${agent}:${tags ?? ""}`));
   const tagList: string[] = (() => {
     try { return tags ? JSON.parse(tags) : []; }
     catch { return []; }
@@ -94,21 +121,21 @@ export function inferCoords(
   // 1. Check for known APT name in tags
   for (const tag of lower) {
     for (const [apt, coords] of Object.entries(APT_COORDS)) {
-      if (tag.includes(apt)) return jitter(coords);
+      if (tag.includes(apt)) return jitter(coords, rand);
     }
   }
 
   // 2. Check for country name in tags
   for (const tag of lower) {
     for (const [country, coords] of Object.entries(COUNTRY_COORDS)) {
-      if (tag.includes(country)) return jitter(coords);
+      if (tag.includes(country)) return jitter(coords, rand);
     }
   }
 
   // 3. Check for sector in tags
   for (const tag of lower) {
     for (const [sector, coords] of Object.entries(SECTOR_COORDS)) {
-      if (tag.includes(sector)) return jitter(coords);
+      if (tag.includes(sector)) return jitter(coords, rand);
     }
   }
 
@@ -122,6 +149,6 @@ export function inferCoords(
   };
 
   const options = fallbacks[agent] ?? fallbacks["vuln"]!;
-  const base = options[Math.floor(Math.random() * options.length)]!;
-  return jitter(base, 8);
+  const base = options[Math.floor(rand() * options.length)]!;
+  return jitter(base, rand, 8);
 }

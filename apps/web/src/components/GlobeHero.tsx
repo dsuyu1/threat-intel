@@ -396,8 +396,8 @@ function buildStarfield(): THREE.Points {
 
     // Very subtle per-star twinkle
     twinkleOffset[i] = Math.random() * Math.PI * 2;
-    twinkleSpeed[i]  = 0.3 + Math.random() * 0.9;
-    twinkleAmp[i]    = 0.04 + Math.random() * 0.06;
+    twinkleSpeed[i]  = 0.15 + Math.random() * 0.55;
+    twinkleAmp[i]    = 0.01 + Math.random() * 0.02;
   }
 
   const geo = new THREE.BufferGeometry();

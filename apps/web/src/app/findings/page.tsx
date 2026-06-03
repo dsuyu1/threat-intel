@@ -1,9 +1,9 @@
+export const runtime = "edge";
+
 import Link from "next/link";
 import { getDb, findings } from "@ti/db";
 import { desc } from "drizzle-orm";
 import { FindingCard } from "../../components/FindingCard";
-
-export const revalidate = 300;
 
 async function getLatestFindings() {
   const db = getDb();

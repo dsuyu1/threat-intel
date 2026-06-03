@@ -1,10 +1,10 @@
+export const runtime = "edge";
+
 import { getDb, findings } from "@ti/db";
 import { desc } from "drizzle-orm";
 import { GlobeLoader } from "../components/GlobeLoader";
 import { inferCoords } from "../lib/geo";
 import type { MapFinding } from "../components/ThreatMap";
-
-export const revalidate = 3600;
 
 async function getMapFindings(): Promise<MapFinding[]> {
   const db = getDb();

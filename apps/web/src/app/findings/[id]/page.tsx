@@ -1,9 +1,9 @@
+export const runtime = "edge";
+
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb, findings } from "@ti/db";
 import { eq } from "drizzle-orm";
-
-export const revalidate = 300;
 
 async function getFindingById(id: string) {
   const db = getDb();

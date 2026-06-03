@@ -1,11 +1,14 @@
 import type { NextConfig } from "next";
+import type { Configuration } from "webpack";
 
 const nextConfig: NextConfig = {
-  // Required for Cloudflare Pages deployment
-  // See: https://developers.cloudflare.com/pages/framework-guides/nextjs/
-  experimental: {
-    // Enable when deploying to Cloudflare Pages edge runtime
-    // runtime: 'edge',
+  webpack(config: Configuration, { dev }: { dev: boolean }) {
+    // Disable webpack cache in production so build output stays
+    // under Cloudflare Pages' 25 MiB per-file limit
+    if (!dev) {
+      config.cache = false;
+    }
+    return config;
   },
 };
 

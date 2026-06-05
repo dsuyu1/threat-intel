@@ -218,7 +218,7 @@ export default async function ActorsPage({
     <div className="mx-auto max-w-[1440px] px-8 py-10 space-y-8">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">
-          Threat actors
+          Threat actor library
         </h1>
         <p className="text-sm text-zinc-600 dark:text-zinc-500">
           Filter and sort by origin, TTPs, mitigations, CVEs, and sectors.

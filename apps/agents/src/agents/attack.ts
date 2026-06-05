@@ -8,8 +8,10 @@
 
 import "../lib/env.js";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import { resolve as resolvePath } from "node:path";
 import Parser from "rss-parser";
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { getDb, docChunks, documents, sources, type Source } from "@ti/db";
 import { embedTexts, generateText } from "../lib/openai.js";
 import { chunkText, cleanHtmlToText } from "../lib/text.js";
@@ -58,10 +60,97 @@ type Extraction = {
   }>;
 };
 
+function repairJsonObjectString(input: string): string {
+  // Heuristic repair for "JSON-ish" model output:
+  // - Escapes raw newlines inside strings
+  // - Escapes stray quotes inside strings (when they don't look like string terminators)
+  // - Strips trailing commas before } or ]
+  let out = "";
+  let inString = false;
+  let escaped = false;
+
+  const nextNonWs = (s: string, from: number) => {
+    for (let i = from; i < s.length; i++) {
+      const c = s[i]!;
+      if (!/\s/.test(c)) return c;
+    }
+    return null;
+  };
+
+  for (let i = 0; i < input.length; i++) {
+    const c = input[i]!;
+
+    if (escaped) {
+      out += c;
+      escaped = false;
+      continue;
+    }
+
+    if (inString && c === "\\") {
+      out += c;
+      escaped = true;
+      continue;
+    }
+
+    if (c === "\"") {
+      if (!inString) {
+        inString = true;
+        out += c;
+        continue;
+      }
+
+      const next = nextNonWs(input, i + 1);
+      const looksLikeTerminator = next == null || next === "," || next === "}" || next === "]" || next === ":";
+      if (looksLikeTerminator) {
+        inString = false;
+        out += c;
+      } else {
+        out += "\\\"";
+      }
+      continue;
+    }
+
+    if (inString && (c === "\n" || c === "\r")) {
+      out += "\\n";
+      continue;
+    }
+
+    out += c;
+  }
+
+  // Strip trailing commas (outside of strings is good enough for our use-case).
+  out = out.replace(/,(\s*[}\]])/g, "$1").replace(/,\s*}/g, "}").replace(/,\s*]/g, "]");
+  return out;
+}
+
 function safeJsonParse<T>(text: string): T | null {
+  const raw = String(text ?? "");
+  const cleaned = raw
+    .trim()
+    .replace(/^\uFEFF/, "")
+    .replace(/^```(?:json)?/i, "")
+    .replace(/```$/, "")
+    .trim();
+
   try {
-    return JSON.parse(text) as T;
+    return JSON.parse(cleaned) as T;
   } catch {
+    // Best-effort recovery for "almost JSON" model outputs.
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      const sliced = cleaned.slice(start, end + 1);
+      try {
+        return JSON.parse(sliced) as T;
+      } catch {
+        const repaired = repairJsonObjectString(sliced);
+        try {
+          return JSON.parse(repaired) as T;
+        } catch {
+          return null;
+        }
+      }
+    }
     return null;
   }
 }
@@ -93,22 +182,30 @@ async function extractFromChunks(params: {
 
 Return STRICT JSON with these keys: actors, origin_countries, target_sectors, techniques, cves.
 
+Schema (all fields required unless explicitly noted):
+- actors: Array<{ name: string }>
+- origin_countries: Array<{ actor: string; iso2: string; confidence: number; excerpt: string; chunk_index: number | null }>
+- target_sectors: Array<{ actor: string; sector: string; confidence: number; excerpt: string; chunk_index: number | null }>
+- techniques: Array<{ actor: string; technique: string; confidence: number; excerpt: string; chunk_index: number | null }>
+- cves: Array<{ actor: string; cve: string; confidence: number; excerpt: string; chunk_index: number | null }>
+
 Rules:
 - Use ISO2 for origin countries (e.g., RU, CN, IR, KP, US). If unknown, omit.
 - target_sectors.sector SHOULD be one of: ${SECTORS.join(", ")}. If the text implies a sector, choose the closest option.
 - techniques.technique MUST be an explicit ATT&CK ID like T1059 or T1059.001 (if not explicit, omit).
 - cves.cve MUST match CVE-YYYY-NNNN (if not explicit, omit).
+- For every record in origin_countries/target_sectors/techniques/cves, the field "actor" MUST be present and MUST match one of actors[].name.
 - Every record must include an excerpt quote (<= 200 chars) and chunk_index where that quote came from (or null if unclear).
 - Do not invent facts. If the text is speculative, lower confidence.
-
+ 
  Title: ${params.title}
  URL: ${params.url}
- 
+  
  ${chunkBlock}`;
 
   const content = await generateText({
     prompt,
-    temperature: 0.1,
+    temperature: 0,
     maxTokens: 900,
     jsonMode: true,
   });
@@ -116,6 +213,18 @@ Rules:
   const parsed = safeJsonParse<Extraction>(content);
   if (!parsed) {
     console.warn("[AttackAgent] JSON parse failed (first 200 chars):", content.slice(0, 200));
+    if ((process.env["ATTACK_AGENT_DUMP_PARSE_FAIL"] ?? "") === "1") {
+      try {
+        const dir = resolvePath(process.cwd(), ".tmp");
+        fs.mkdirSync(dir, { recursive: true });
+        const safeName = crypto.createHash("sha256").update(params.url).digest("hex").slice(0, 12);
+        const outPath = resolvePath(dir, `attack-extract-parse-fail-${safeName}.txt`);
+        fs.writeFileSync(outPath, content, "utf8");
+        console.warn("[AttackAgent] Wrote parse-fail output to:", outPath);
+      } catch (err) {
+        console.warn("[AttackAgent] Failed writing parse-fail output:", err);
+      }
+    }
   }
   return parsed;
 }
@@ -179,6 +288,8 @@ export async function runAttackAgent() {
   const budget = new NewDocBudget(parseMaxNewDocsPerRun());
   const reprocessOkDocs = (process.env["ATTACK_AGENT_REPROCESS_OK_DOCS"] ?? "") === "1";
   const retryErrorDocs = (process.env["ATTACK_AGENT_RETRY_ERROR_DOCS"] ?? "") === "1";
+  const retryOnly = (process.env["ATTACK_AGENT_RETRY_ONLY"] ?? "") === "1";
+  const onlyUrl = (process.env["ATTACK_AGENT_ONLY_URL"] ?? "").trim() || null;
   const maxRetryDocs = Math.max(
     0,
     Number(process.env["ATTACK_AGENT_MAX_RETRY_DOCS"] ?? "80") || 80
@@ -188,22 +299,36 @@ export async function runAttackAgent() {
   const parser = new Parser();
 
   if (retryErrorDocs && maxRetryDocs > 0) {
-    const errorDocs = await db
-      .select({
-        id: documents.id,
-        url: documents.url,
-        title: documents.title,
-        publishedAt: documents.publishedAt,
-        cleanText: documents.cleanText,
-      })
-      .from(documents)
-      .where(and(eq(documents.status, "error"), isNotNull(documents.cleanText)))
-      .orderBy(desc(documents.fetchedAt))
-      .limit(maxRetryDocs);
+    const statuses: Array<"ok" | "error"> = reprocessOkDocs ? ["error", "ok"] : ["error"];
+
+    const errorDocs = onlyUrl
+      ? await db
+          .select({
+            id: documents.id,
+            url: documents.url,
+            title: documents.title,
+            publishedAt: documents.publishedAt,
+            cleanText: documents.cleanText,
+          })
+          .from(documents)
+          .where(and(eq(documents.url, onlyUrl), isNotNull(documents.cleanText)))
+          .limit(1)
+      : await db
+          .select({
+            id: documents.id,
+            url: documents.url,
+            title: documents.title,
+            publishedAt: documents.publishedAt,
+            cleanText: documents.cleanText,
+          })
+          .from(documents)
+          .where(and(inArray(documents.status, statuses), isNotNull(documents.cleanText)))
+          .orderBy(desc(documents.fetchedAt))
+          .limit(maxRetryDocs);
 
     if (errorDocs.length > 0) {
       console.log(
-        `[AttackAgent] Retrying ${errorDocs.length} error docs from DB (ATTACK_AGENT_RETRY_ERROR_DOCS=1)`
+        `[AttackAgent] Retrying ${errorDocs.length} docs from DB (ATTACK_AGENT_RETRY_ERROR_DOCS=1)`
       );
     }
 
@@ -288,13 +413,19 @@ export async function runAttackAgent() {
         continue;
       }
 
-      for (const a of extraction.actors ?? []) {
-        if (!a?.name) continue;
-        await resolveOrCreateActorByName(a.name);
+      const extractedActorNames = (extraction.actors ?? [])
+        .map((a) => String(a?.name ?? "").trim())
+        .filter(Boolean);
+      const impliedActor = extractedActorNames.length === 1 ? extractedActorNames[0]! : null;
+
+      for (const name of extractedActorNames) {
+        await resolveOrCreateActorByName(name);
       }
 
       for (const rec of extraction.origin_countries ?? []) {
-        const actorId = await resolveOrCreateActorByName(rec.actor);
+        const actorName = String((rec as any).actor ?? "").trim() || impliedActor;
+        if (!actorName) continue;
+        const actorId = await resolveOrCreateActorByName(actorName);
         const iso2 = (rec.iso2 ?? "").toUpperCase();
         if (!/^[A-Z]{2}$/.test(iso2)) continue;
         await ensureKgEntity({ kind: "country", entityId: iso2, name: iso2 });
@@ -319,7 +450,9 @@ export async function runAttackAgent() {
       }
 
       for (const rec of extraction.target_sectors ?? []) {
-        const actorId = await resolveOrCreateActorByName(rec.actor);
+        const actorName = String((rec as any).actor ?? "").trim() || impliedActor;
+        if (!actorName) continue;
+        const actorId = await resolveOrCreateActorByName(actorName);
         const sector = resolveSector(rec.sector ?? "");
         if (!sector || !isSector(sector)) continue;
         await ensureKgEntity({ kind: "sector", entityId: sector, name: sector });
@@ -344,7 +477,9 @@ export async function runAttackAgent() {
       }
 
       for (const rec of extraction.techniques ?? []) {
-        const actorId = await resolveOrCreateActorByName(rec.actor);
+        const actorName = String((rec as any).actor ?? "").trim() || impliedActor;
+        if (!actorName) continue;
+        const actorId = await resolveOrCreateActorByName(actorName);
         const technique = (rec.technique ?? "").toUpperCase();
         if (!/^T\d{4}(?:\.\d{3})?$/.test(technique)) continue;
         await ensureKgEntityIfMissing({
@@ -374,7 +509,9 @@ export async function runAttackAgent() {
       }
 
       for (const rec of extraction.cves ?? []) {
-        const actorId = await resolveOrCreateActorByName(rec.actor);
+        const actorName = String((rec as any).actor ?? "").trim() || impliedActor;
+        if (!actorName) continue;
+        const actorId = await resolveOrCreateActorByName(actorName);
         const cve = (rec.cve ?? "").toUpperCase();
         if (!/^CVE-\d{4}-\d{4,}$/.test(cve)) continue;
         await ensureKgEntity({ kind: "cve", entityId: cve, name: cve });
@@ -398,6 +535,12 @@ export async function runAttackAgent() {
         });
       }
     }
+  }
+
+  if (retryOnly) {
+    console.log("[AttackAgent] Retry-only mode enabled; skipping RSS feeds.");
+    console.log("[AttackAgent] Done.");
+    return;
   }
 
   for (const src of rssSources) {
@@ -561,9 +704,13 @@ export async function runAttackAgent() {
       }
 
       // Ensure referenced entities exist
-      for (const a of extraction.actors ?? []) {
-        if (!a?.name) continue;
-        await resolveOrCreateActorByName(a.name);
+      const extractedActorNames = (extraction.actors ?? [])
+        .map((a) => String(a?.name ?? "").trim())
+        .filter(Boolean);
+      const impliedActor = extractedActorNames.length === 1 ? extractedActorNames[0]! : null;
+
+      for (const name of extractedActorNames) {
+        await resolveOrCreateActorByName(name);
       }
 
       const sourceRef: Pick<Source, "id" | "reliability"> = {
@@ -572,7 +719,9 @@ export async function runAttackAgent() {
       };
 
       for (const rec of extraction.origin_countries ?? []) {
-        const actorId = await resolveOrCreateActorByName(rec.actor);
+        const actorName = String((rec as any).actor ?? "").trim() || impliedActor;
+        if (!actorName) continue;
+        const actorId = await resolveOrCreateActorByName(actorName);
         const iso2 = (rec.iso2 ?? "").toUpperCase();
         if (!/^[A-Z]{2}$/.test(iso2)) continue;
         await ensureKgEntity({ kind: "country", entityId: iso2, name: iso2 });
@@ -597,7 +746,9 @@ export async function runAttackAgent() {
       }
 
       for (const rec of extraction.target_sectors ?? []) {
-        const actorId = await resolveOrCreateActorByName(rec.actor);
+        const actorName = String((rec as any).actor ?? "").trim() || impliedActor;
+        if (!actorName) continue;
+        const actorId = await resolveOrCreateActorByName(actorName);
         const sector = resolveSector(rec.sector ?? "");
         if (!sector || !isSector(sector)) continue;
         await ensureKgEntity({ kind: "sector", entityId: sector, name: sector });
@@ -622,7 +773,9 @@ export async function runAttackAgent() {
       }
 
       for (const rec of extraction.techniques ?? []) {
-        const actorId = await resolveOrCreateActorByName(rec.actor);
+        const actorName = String((rec as any).actor ?? "").trim() || impliedActor;
+        if (!actorName) continue;
+        const actorId = await resolveOrCreateActorByName(actorName);
         const technique = (rec.technique ?? "").toUpperCase();
         if (!/^T\d{4}(?:\.\d{3})?$/.test(technique)) continue;
         await ensureKgEntityIfMissing({
@@ -652,7 +805,9 @@ export async function runAttackAgent() {
       }
 
       for (const rec of extraction.cves ?? []) {
-        const actorId = await resolveOrCreateActorByName(rec.actor);
+        const actorName = String((rec as any).actor ?? "").trim() || impliedActor;
+        if (!actorName) continue;
+        const actorId = await resolveOrCreateActorByName(actorName);
         const cve = (rec.cve ?? "").toUpperCase();
         if (!/^CVE-\d{4}-\d{4,}$/.test(cve)) continue;
         await ensureKgEntity({ kind: "cve", entityId: cve, name: cve });

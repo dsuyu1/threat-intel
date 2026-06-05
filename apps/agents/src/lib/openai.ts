@@ -66,6 +66,48 @@ export function normalizeEmbedding1536(embedding: number[]): number[] {
   return out;
 }
 
+function fnv1a32(input: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function localHashEmbedding(text: string): number[] {
+  const dim = 1536;
+  const vec = new Array<number>(dim).fill(0);
+
+  const tokens = (text.toLowerCase().match(/[a-z0-9]+/g) ?? []).slice(0, 8000);
+  for (const t of tokens) {
+    const idx = fnv1a32(t) % dim;
+    vec[idx] = (vec[idx] ?? 0) + 1;
+  }
+
+  let norm = 0;
+  for (const v of vec) norm += v * v;
+  norm = Math.sqrt(norm) || 1;
+  for (let i = 0; i < vec.length; i++) {
+    const v = vec[i] ?? 0;
+    vec[i] = v / norm;
+  }
+  return vec;
+}
+
+function shouldFallbackToLocalEmbeddings(err: unknown): boolean {
+  const anyErr = err as any;
+  const status = Number(anyErr?.status ?? anyErr?.response?.status ?? NaN);
+  const msg = String(anyErr?.message ?? err ?? "");
+  const body = String(anyErr?.error?.message ?? anyErr?.body ?? "");
+
+  // Common "OpenAI-compatible" gaps: embeddings not supported, or embedding model ids differ.
+  if (status === 404 || status === 501) return true;
+  if (status === 400 && /embeddings|invalid model|model name/i.test(msg + " " + body)) return true;
+  if (/\/embeddings/i.test(msg)) return true;
+  return false;
+}
+
 function parseRetryAfterMs(params: { res: Response; bodyText: string }): number | null {
   const header = params.res.headers.get("retry-after");
   if (header) {
@@ -98,11 +140,23 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
   const provider = getAiProvider();
   if (provider === "openai") {
     const client = getOpenAIClient();
-    const res = await client.embeddings.create({
-      model: getEmbeddingModel(),
-      input: texts,
-    });
-    return res.data.map((d) => normalizeEmbedding1536(d.embedding));
+    try {
+      const res = await client.embeddings.create({
+        model: getEmbeddingModel(),
+        input: texts,
+      });
+      return res.data.map((d) => normalizeEmbedding1536(d.embedding));
+    } catch (err) {
+      const allowLocal = (process.env["ALLOW_LOCAL_EMBEDDINGS"] ?? "1") !== "0";
+      if (allowLocal && shouldFallbackToLocalEmbeddings(err)) {
+        console.warn(
+          "[AI] Embeddings API failed; falling back to local hash embeddings. " +
+            "Set EMBEDDING_MODEL to a supported embeddings model for your OPENAI_BASE_URL, or set ALLOW_LOCAL_EMBEDDINGS=0 to fail fast."
+        );
+        return texts.map((t) => localHashEmbedding(t));
+      }
+      throw err;
+    }
   }
 
   const geminiKey = process.env["GEMINI_API_KEY"];

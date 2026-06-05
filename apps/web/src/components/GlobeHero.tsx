@@ -1703,7 +1703,7 @@ export function GlobeHero({ countryHeat }: Props) {
           }}
         >
           <aside
-            className="relative w-[360px] max-w-[calc(100vw-2rem)] max-h-[82vh] bg-white/90 dark:bg-zinc-950/70 backdrop-blur border border-zinc-200 dark:border-zinc-800/70 rounded-2xl shadow-2xl shadow-black/10 dark:shadow-black/60 px-5 py-5 pr-12 overflow-auto"
+            className="relative w-[360px] max-w-[calc(100vw-2rem)] max-h-[82vh] bg-white/90 dark:bg-zinc-950/70 backdrop-blur border border-zinc-200 dark:border-zinc-800/70 rounded-2xl shadow-2xl shadow-black/10 dark:shadow-black/60 px-5 py-5 pr-12 overflow-auto no-scrollbar"
           >
             <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">How this heatmap works</h1>
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
@@ -1722,6 +1722,13 @@ export function GlobeHero({ countryHeat }: Props) {
                 <div className="mt-1">
                   Sum of each actor&apos;s origin-attribution score. Scores increase with repeated, higher-confidence
                   observations and can decay as data gets stale.
+                </div>
+              </div>
+              <div>
+                <div className="text-zinc-900 dark:text-zinc-200 font-medium">Score</div>
+                <div className="mt-1">
+                  A decayed support score for a relationship. Each observation adds roughly (source reliability × extraction confidence),
+                  and older observations decay over time so recently-seen evidence weighs more.
                 </div>
               </div>
               <div>
@@ -1749,6 +1756,72 @@ export function GlobeHero({ countryHeat }: Props) {
                 >
                   attack.mitre.org
                 </a>
+              </div>
+              <div>
+                Other feeds used across the platform include{" "}
+                <a
+                  href="https://nvd.nist.gov/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                >
+                  NVD
+                </a>
+                ,{" "}
+                <a
+                  href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                >
+                  CISA KEV
+                </a>
+                ,{" "}
+                <a
+                  href="https://www.cisa.gov/news-events/cybersecurity-advisories"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                >
+                  CISA Advisories
+                </a>
+                , threat blogs,{" "}
+                <a
+                  href="https://github.com/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                >
+                  GitHub
+                </a>
+                ,{" "}
+                <a
+                  href="https://www.exploit-db.com/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                >
+                  ExploitDB
+                </a>
+                ,{" "}
+                <a
+                  href="https://bazaar.abuse.ch/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                >
+                  MalwareBazaar
+                </a>
+                , and{" "}
+                <a
+                  href="https://any.run/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                >
+                  ANY.RUN
+                </a>
+                .
               </div>
               <div className="text-xs text-zinc-500">
                 Every score shown in the UI links back to citations on country and actor pages.

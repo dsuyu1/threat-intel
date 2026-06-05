@@ -37,7 +37,7 @@ export default function RootLayout({
             } catch {}
           })();
         `}</Script>
-        <nav className="shrink-0 z-10 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm border-b border-zinc-200 dark:border-zinc-800">
+        <nav className="sticky top-0 shrink-0 z-50 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm border-b border-zinc-200 dark:border-zinc-800">
           <div className="max-w-[90ch] mx-auto px-8 py-4">
             <Nav />
           </div>
@@ -57,38 +57,38 @@ function Nav() {
     <nav className="flex items-center gap-6">
       <a
         href="https://damianvillarreal.com"
-        className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+        className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors duration-200 ease-out"
       >
         blog
       </a>
       <a
         href="https://damianvillarreal.com/about"
-        className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+        className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors duration-200 ease-out"
       >
         about
       </a>
       <details className="relative group">
-        <summary className="list-none [&::-webkit-details-marker]:hidden cursor-pointer text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors inline-flex items-center gap-1">
+        <summary className="list-none [&::-webkit-details-marker]:hidden cursor-pointer text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors duration-200 ease-out inline-flex items-center gap-1">
           security
           <span
-            className="text-zinc-500 group-open:rotate-180 transition-transform"
+            className="text-zinc-500 group-open:rotate-180 transition-transform duration-200 ease-out"
             aria-hidden="true"
           >
             ▾
           </span>
         </summary>
-        <div className="absolute left-0 mt-2 w-48 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur shadow-2xl shadow-black/20 dark:shadow-black/60 p-1 z-50">
+        <div className="absolute left-0 mt-2 w-48 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur shadow-2xl shadow-black/20 dark:shadow-black/60 p-1 z-50 block opacity-0 translate-y-1 scale-[0.98] pointer-events-none group-open:opacity-100 group-open:translate-y-0 group-open:scale-100 group-open:pointer-events-auto transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none motion-reduce:transform-none">
           <a
             href="/"
-            className="block rounded-lg px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/5 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+            className="block rounded-lg px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/5 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors duration-200 ease-out"
           >
             global view
           </a>
           <a
             href="/actors"
-            className="block rounded-lg px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/5 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+            className="block rounded-lg px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/5 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors duration-200 ease-out"
           >
-            threat actors
+            threat actor library
           </a>
         </div>
       </details>

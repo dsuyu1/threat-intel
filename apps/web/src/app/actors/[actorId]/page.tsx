@@ -510,7 +510,7 @@ export default async function ActorPage({
         <div className="space-y-10">
           <section>
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">MITRE</h2>
+              <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">MITRE</h1>
               <a
                 href={`https://attack.mitre.org/groups/${actor.entityId}/`}
                 target="_blank"
@@ -557,7 +557,7 @@ export default async function ActorPage({
           <section>
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Campaigns</h2>
+                 <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Campaigns</h1>
                 <InfoTip
                   title="MITRE"
                   body="Campaign links are pulled from MITRE ATT&CK campaign pages (and mapped to groups)."
@@ -596,7 +596,7 @@ export default async function ActorPage({
           <section>
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Mitigations</h2>
+                 <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Mitigations</h1>
                 <InfoTip
                   title="ATT&CK"
                   body="Mitigations are derived from MITRE ATT&CK technique ↔ mitigation mappings."
@@ -618,7 +618,7 @@ export default async function ActorPage({
 
           <section className="space-y-3">
             <div className="flex items-baseline justify-between gap-3">
-              <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Target Sectors</h2>
+              <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Target Sectors</h1>
               <span className="text-sm text-zinc-500 tabular-nums">
                 {formatShownOfTotal(sectors.length, facetCounts.sectorCount)}
               </span>
@@ -679,7 +679,7 @@ function FacetCard({
   return (
     <section className="rounded-xl border border-zinc-200 dark:border-zinc-900/80 bg-white/70 dark:bg-black/35">
       <div className="flex items-baseline justify-between px-4 pt-4">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
+        <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title}</h1>
         <span className="text-xs text-zinc-500">{items.length}</span>
       </div>
 
@@ -768,7 +768,7 @@ function FacetRow({
 
         <summary className="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 pt-4">
           <div className="flex items-baseline justify-between gap-4">
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
+             <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title}</h1>
             <div className="flex items-center gap-3 shrink-0">
               <span className="text-xs text-zinc-500 tabular-nums">{formatShownOfTotal(items.length, totalCount)}</span>
               <span className="text-xs text-zinc-500 inline-flex items-center gap-1">
@@ -884,7 +884,7 @@ function FacetRow({
   return (
     <section className="rounded-xl border border-zinc-200 dark:border-zinc-900/80 bg-white/70 dark:bg-black/35">
       <div className="flex items-baseline justify-between px-4 pt-4">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
+        <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title}</h1>
         <span className="text-xs text-zinc-500 tabular-nums">{formatShownOfTotal(items.length, totalCount)}</span>
       </div>
 
@@ -1082,7 +1082,7 @@ function TopTtpSection({
       <summary className="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none">
         <div className="flex items-baseline justify-between px-4 pt-4 pb-3">
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Top TTPs (ATT&amp;CK)</h2>
+            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Top TTPs (ATT&amp;CK)</h1>
             <p className="mt-1 text-xs text-zinc-500 group-open:hidden">Hover to pause; expand to view all grouped by tactic.</p>
             <p className="mt-1 text-xs text-zinc-500 hidden group-open:block">
               Grouped by MITRE ATT&amp;CK Enterprise tactic order.

@@ -308,9 +308,9 @@ export function SimilaritySpokes({
       >
         <div className="flex items-baseline justify-between gap-4">
           <div className="min-w-0">
-            <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+            <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
               Similarities Map
-            </h2>
+            </h1>
             <p className="mt-1 text-sm text-zinc-500">Drag to pan. Scroll to zoom.</p>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">

@@ -64,7 +64,7 @@ export default async function FindingPage({
 
       {finding.summary && (
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-zinc-200">Summary</h2>
+          <h1 className="text-sm font-semibold text-zinc-200">Summary</h1>
           <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
             {finding.summary}
           </p>
@@ -73,7 +73,7 @@ export default async function FindingPage({
 
       {(finding.cvssScore || finding.cvssVector) && (
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-zinc-200">Scoring</h2>
+          <h1 className="text-sm font-semibold text-zinc-200">Scoring</h1>
           <div className="text-sm text-zinc-300 space-y-1">
             {finding.cvssScore && (
               <div className="flex items-center gap-2">
@@ -92,7 +92,7 @@ export default async function FindingPage({
 
       {tags.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-zinc-200">Tags</h2>
+          <h1 className="text-sm font-semibold text-zinc-200">Tags</h1>
           <div className="flex flex-wrap gap-2">
             {tags.map((tag) => (
               <span
@@ -108,7 +108,7 @@ export default async function FindingPage({
 
       {(finding.sourceUrl || finding.pocUrl) && (
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-zinc-200">Links</h2>
+          <h1 className="text-sm font-semibold text-zinc-200">Links</h1>
           <div className="flex flex-col gap-2 text-sm">
             {finding.sourceUrl && (
               <a
@@ -136,7 +136,7 @@ export default async function FindingPage({
 
       {finding.rawData && (
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-zinc-200">Raw</h2>
+          <h1 className="text-sm font-semibold text-zinc-200">Raw</h1>
           <details className="bg-zinc-950 border border-zinc-800 rounded-lg p-4">
             <summary className="cursor-pointer text-sm text-zinc-400">
               Show raw source payload

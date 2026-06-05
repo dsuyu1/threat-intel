@@ -1705,7 +1705,7 @@ export function GlobeHero({ countryHeat }: Props) {
           <aside
             className="relative w-[360px] max-w-[calc(100vw-2rem)] max-h-[82vh] bg-white/90 dark:bg-zinc-950/70 backdrop-blur border border-zinc-200 dark:border-zinc-800/70 rounded-2xl shadow-2xl shadow-black/10 dark:shadow-black/60 px-5 py-5 pr-12 overflow-auto"
           >
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">How this heatmap works</h2>
+            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">How this heatmap works</h1>
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
               Countries shade red based on how strongly threat actors are attributed as originating from that
               country. Click a country to see the top actors and drill into evidence.

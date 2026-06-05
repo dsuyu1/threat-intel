@@ -9,13 +9,17 @@ export function getAiProvider(): AiProvider {
   if (forced === "openai" || forced === "gemini") return forced;
 
   const openaiKey = process.env["OPENAI_API_KEY"];
-  const openaiBaseUrl = process.env["OPENAI_BASE_URL"];
   const geminiKey = process.env["GEMINI_API_KEY"];
 
-  // Prefer OpenAI when explicitly configured (key + base URL), otherwise default to Gemini
-  // if it's available, because many dev environments set OPENAI_API_KEY for other tools.
-  if (openaiKey && (openaiBaseUrl || !geminiKey)) return "openai";
-  return geminiKey ? "gemini" : "openai";
+  // If an OpenAI key is present, prefer OpenAI by default (unless explicitly forced to Gemini).
+  // This avoids surprising "Gemini by default" behavior in environments where both keys exist.
+  if (openaiKey) return "openai";
+
+  // Otherwise, fall back to Gemini when configured.
+  if (geminiKey) return "gemini";
+
+  // Default provider when nothing is configured.
+  return "openai";
 }
 
 function normalizeGeminiModel(model: string): { model: string; pathModel: string } {

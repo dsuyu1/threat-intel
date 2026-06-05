@@ -279,6 +279,16 @@ export function Pentagraph({ facets, branches }: { facets: Facet[]; branches: Br
       depthsRaw.push(clamp(d, 0, stemMax * 0.95));
     }
 
+    // Fade to baseline at the plot edges to avoid hard vertical cut-offs when closing the fill path.
+    const smoothstep01 = (t: number) => t * t * (3 - 2 * t);
+    const taperW = clamp(w * 0.08, 32, 96);
+    for (let i = 0; i < depthsRaw.length; i++) {
+      const x = (i / (samples - 1)) * w;
+      const left = smoothstep01(clamp(x / taperW, 0, 1));
+      const right = smoothstep01(clamp((w - x) / taperW, 0, 1));
+      depthsRaw[i] = depthsRaw[i] * left * right;
+    }
+
     // Extra smoothing to avoid faceting/corners when rendered as an SVG path.
     let depths = depthsRaw;
     for (let pass = 0; pass < 2; pass++) {
@@ -381,11 +391,11 @@ export function Pentagraph({ facets, branches }: { facets: Facet[]; branches: Br
       >
         <div className="flex items-baseline justify-between gap-4">
           <div className="min-w-0">
-            <h2 className="text-2xl md:text-3xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+            <h1 className="text-2xl md:text-3xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
               Overview
-            </h2>
+            </h1>
             <p className="mt-1 text-sm text-zinc-500">
-              Terrain shows top relationships; totals are listed below.
+              Terrain shows top relationships; totals are listed below. “Relative weight (log)” means we take log(1 + score) and scale it relative to the actor’s maximum, so very large scores don’t dominate the chart.
             </p>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">

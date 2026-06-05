@@ -22,3 +22,45 @@ h3,
 h4 {
   text-wrap: balance;
 }
+
+@keyframes ti-marquee-left {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes ti-marquee-right {
+  from {
+    transform: translate3d(-50%, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.ti-marquee-left,
+.ti-marquee-right {
+  animation-duration: var(--ti-marquee-duration, 75s);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+.ti-marquee-left {
+  animation-name: ti-marquee-left;
+}
+
+.ti-marquee-right {
+  animation-name: ti-marquee-right;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ti-marquee-left,
+  .ti-marquee-right {
+    animation: none !important;
+    transform: none !important;
+  }
+}

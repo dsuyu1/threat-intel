@@ -52,3 +52,6 @@ desktop.ini
 # ── Misc ──────────────────────────────────────────────────────────────────────
 *.tgz
 .cache/
+
+# Local scratch / reference repos
+.tmp/

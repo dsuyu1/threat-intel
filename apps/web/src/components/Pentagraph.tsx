@@ -16,8 +16,6 @@ type Branch = {
   }>;
 };
 
-type NodeKind = "origin" | "sector" | "ttp" | "cve" | "mitigation" | "other";
-
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
@@ -241,17 +239,7 @@ export function Pentagraph({ facets, branches }: { facets: Facet[]; branches: Br
       return maxLog > 0 ? lw / maxLog : 0;
     };
 
-    const nodes: Array<{
-      id: string;
-      label: string;
-      weight: number;
-      norm: number;
-      extra: number;
-      x: number;
-      groupIndex: number;
-      kind: NodeKind;
-      strokeWidth: number;
-    }> = [];
+    const nodes: Array<{ x: number; norm: number }> = [];
 
     groups.forEach((g) => {
       const groupX = (g.index + 0.5) * (w / Math.max(1, facetCount));
@@ -259,32 +247,12 @@ export function Pentagraph({ facets, branches }: { facets: Facet[]; branches: Br
       const segmentW = w / Math.max(1, facetCount);
       const step = n > 1 ? Math.min(44, segmentW / (n + 0.75)) : 0;
 
-      const labelLower = (g.facet?.label ?? "").toLowerCase();
-      const kind: NodeKind =
-        labelLower.includes("cve") ? "cve" :
-        labelLower.includes("ttp") || labelLower.includes("technique") ? "ttp" :
-        labelLower.includes("sector") ? "sector" :
-        labelLower.includes("origin") || labelLower.includes("country") ? "origin" :
-        labelLower.includes("mitigation") ? "mitigation" :
-        "other";
-
       g.items.forEach((it, idx) => {
         const norm = toNorm(it.weight);
-        const extra = stemMin + norm * stemMax;
         const centerOffset = n > 1 ? (idx - (n - 1) / 2) * step : 0;
         const jitter = (hash01(`${g.index}:${it.label}`) - 0.5) * Math.min(10, step * 0.35 + 4);
         const x = clamp(groupX + centerOffset + jitter, 6, w - 6);
-        nodes.push({
-          id: `item:${g.index}:${it.label}`,
-          label: it.label,
-          weight: it.weight,
-          norm,
-          extra,
-          x,
-          groupIndex: g.index,
-          kind,
-          strokeWidth: 0.6 + norm * 1.6,
-        });
+        nodes.push({ x, norm });
       });
     });
 
@@ -324,15 +292,6 @@ export function Pentagraph({ facets, branches }: { facets: Facet[]; branches: Br
       depths = next;
     }
 
-    const depthAt = (x: number) => {
-      if (samples <= 1) return 0;
-      const t = clamp((x / w) * (samples - 1), 0, samples - 1);
-      const i0 = Math.floor(t);
-      const i1 = Math.min(samples - 1, i0 + 1);
-      const f = t - i0;
-      return depths[i0] * (1 - f) + depths[i1] * f;
-    };
-
     const ridgePts = depths.map((d, i) => {
       const x = (i / (samples - 1)) * w;
       return { x, y: surfaceBaseY - d };
@@ -367,11 +326,6 @@ export function Pentagraph({ facets, branches }: { facets: Facet[]; branches: Br
     const vStep = clamp(Math.round(w / 22), 34, 72);
     for (let x = 0; x <= w; x += vStep) vlines.push(x);
 
-    const nodesWithY = nodes.map((n) => {
-      const surfaceY = surfaceBaseY - depthAt(n.x);
-      return { ...n, ySurface: surfaceY };
-    });
-
     const tickCount = 5;
     const ticks = Array.from({ length: tickCount }).map((_, i) => {
       const t = i / (tickCount - 1);
@@ -386,7 +340,6 @@ export function Pentagraph({ facets, branches }: { facets: Facet[]; branches: Br
       plotH: h,
       facetCount,
       groups,
-      nodes: nodesWithY,
       surfaceBaseY,
       ridgePath,
       layers,
@@ -417,32 +370,6 @@ export function Pentagraph({ facets, branches }: { facets: Facet[]; branches: Br
   const coolTint = isDarkMode ? "#071a2b" : "#ffffff";
   const layerGradientId = (idx: number) => `pg-layer-${clipPathId}-${themeKey}-${idx}`;
 
-  const nodeColor = useCallback(
-    (kind: NodeKind) => {
-      const table: Record<NodeKind, string> = {
-        origin: "#ef4444",     // red
-        sector: "#f97316",     // orange
-        ttp: "#eab308",        // yellow
-        cve: "#22c55e",        // green
-        mitigation: "#3b82f6", // blue
-        other: isDarkMode ? "rgba(255,255,255,0.82)" : "rgba(0,0,0,0.82)",
-      };
-      return table[kind] ?? table.other;
-    },
-    [isDarkMode]
-  );
-
-  const nodeTitle = useCallback((kind: NodeKind, label: string) => {
-    const k =
-      kind === "cve" ? "CVE" :
-      kind === "ttp" ? "TTP" :
-      kind === "sector" ? "Sector" :
-      kind === "origin" ? "Origin" :
-      kind === "mitigation" ? "Mitigation" :
-      "Item";
-    return `${k}: ${label}`;
-  }, []);
-
   return (
     <section aria-label="Overview" className="w-full">
       <div
@@ -458,7 +385,7 @@ export function Pentagraph({ facets, branches }: { facets: Facet[]; branches: Br
               Overview
             </h2>
             <p className="mt-1 text-sm text-zinc-500">
-              Hover nodes for details.
+              Terrain shows top relationships; totals are listed below.
             </p>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -631,35 +558,6 @@ export function Pentagraph({ facets, branches }: { facets: Facet[]; branches: Br
                 strokeWidth={1}
                 opacity={0.65}
               />
-
-              {/* Nodes (resting on the terrain) */}
-              {plot.nodes.map((n) => {
-                const c = nodeColor(n.kind);
-                const dotR = 2.2 + n.norm * 1.8;
-                const cy = n.ySurface - dotR * 0.15;
-                return (
-                  <g key={n.id}>
-                    <circle
-                      cx={n.x}
-                      cy={cy}
-                      r={dotR}
-                      fill={c}
-                      opacity={0.92}
-                    >
-                      <title>{nodeTitle(n.kind, n.label)}</title>
-                    </circle>
-                    <circle
-                      cx={n.x}
-                      cy={cy}
-                      r={dotR}
-                      fill="none"
-                      stroke={isDarkMode ? "rgba(255,255,255,0.28)" : "rgba(0,0,0,0.22)"}
-                      strokeWidth={0.8}
-                      opacity={0.6}
-                    />
-                  </g>
-                );
-              })}
             </g>
           </g>
           </svg>

@@ -31,8 +31,8 @@ const TEXTURE_WIDTH = 2048;
 const TEXTURE_HEIGHT = 1024;
 
 // Visual constants (keep stable to avoid flicker between theme renders)
-const LAND_BASE_FILL_STYLE_DARK = "rgba(3,3,5,0.92)"; // almost black land (no attributed actors)
-const LAND_BASE_FILL_STYLE_LIGHT = "rgba(252,252,253,0.92)"; // almost white land (no attributed actors)
+const LAND_BASE_FILL_STYLE_DARK = "rgba(3,3,5,1)"; // almost black land (no attributed actors)
+const LAND_BASE_FILL_STYLE_LIGHT = "rgba(252,252,253,1)"; // almost white land (no attributed actors)
 const COUNTRY_BORDER_COLOR_HEX_DARK = 0x52525b; // zinc-600
 const COUNTRY_BORDER_COLOR_HEX_LIGHT = 0xd4d4d8; // zinc-300
 const COUNTRY_BORDER_OPACITY_DARK = 0.35;
@@ -608,7 +608,8 @@ export function GlobeHero({ countryHeat }: Props) {
       const mat = globe.material as THREE.MeshPhongMaterial;
       mat.color.setHex(isDark ? 0x0d0d12 : 0xdbeafe); // near-black → light blue
       mat.emissive.setHex(isDark ? 0x06060a : 0x000000);
-      mat.opacity = isDark ? 0.97 : 0.96;
+      mat.transparent = false;
+      mat.opacity = 1;
       mat.needsUpdate = true;
     }
 
@@ -632,7 +633,7 @@ export function GlobeHero({ countryHeat }: Props) {
     if (stars) {
       const mat = stars.material as THREE.PointsMaterial;
       mat.color.setHex(isDark ? 0xffffff : 0x000000);
-      mat.opacity = isDark ? 0.85 : 0.18;
+      mat.opacity = isDark ? 0.85 : 0.35;
       mat.needsUpdate = true;
     }
 
@@ -1002,7 +1003,7 @@ export function GlobeHero({ countryHeat }: Props) {
     {
       const mat = stars.material as THREE.PointsMaterial;
       mat.color.setHex(initialDark ? 0xffffff : 0x000000);
-      mat.opacity = initialDark ? 0.85 : 0.18;
+      mat.opacity = initialDark ? 0.85 : 0.35;
       mat.needsUpdate = true;
     }
     scene.add(stars);
@@ -1018,8 +1019,8 @@ export function GlobeHero({ countryHeat }: Props) {
       color: initialDark ? 0x0d0d12 : 0xdbeafe,
       emissive: initialDark ? 0x06060a : 0x000000,
       shininess: 15,
-      transparent: true,
-      opacity: initialDark ? 0.97 : 0.96,
+      transparent: false,
+      opacity: 1,
     });
     const globeMesh = new THREE.Mesh(globeGeo, globeMat);
     group.add(globeMesh);

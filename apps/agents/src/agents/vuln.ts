@@ -8,7 +8,8 @@
 
 import "../lib/env.js";
 import crypto from "node:crypto";
-import { getDb, findings } from "@ti/db";
+import { getDb, findings, kgEntities } from "@ti/db";
+import { sql } from "drizzle-orm";
 import { summarizeVuln } from "../lib/ai.js";
 
 // ─── NVD Types ────────────────────────────────────────────────────────────────
@@ -72,6 +73,21 @@ function nvdSeverityToEnum(
     LOW: "low",
   };
   return map[s.toUpperCase()] ?? "info";
+}
+
+function pickFirstSentence(text: string): string {
+  const t = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (!t) return "";
+  const m = t.match(/^(.{20,240}?)(?:\. |\.$|; |$)/);
+  return (m?.[1] ?? t).trim();
+}
+
+function cveDisplayName(params: { cveId: string; kevName?: string | null; nvdDescription?: string | null }) {
+  const kev = String(params.kevName ?? "").trim();
+  if (kev) return kev.slice(0, 180);
+  const s = pickFirstSentence(params.nvdDescription ?? "");
+  if (s) return s.slice(0, 180);
+  return params.cveId;
 }
 
 // ─── NVD Fetcher ──────────────────────────────────────────────────────────────
@@ -178,6 +194,61 @@ export async function runVulnAgent() {
       });
     } catch (err) {
       console.warn(`[VulnAgent] AI summary failed for ${cveId}:`, err);
+    }
+
+    // Enrich / upsert CVE entity (used by Actor Explorer pages).
+    try {
+      const displayName = cveDisplayName({
+        cveId,
+        kevName: kev?.vulnerabilityName ?? null,
+        nvdDescription: description,
+      });
+
+      const now = new Date();
+      await db
+        .insert(kgEntities)
+        .values({
+          kind: "cve",
+          entityId: cveId,
+          name: displayName,
+          aliases: null,
+          description: summary ?? description,
+          attributes: {
+            nvd: {
+              url: `https://nvd.nist.gov/vuln/detail/${cveId}`,
+              publishedAt: cve.published,
+              references: (cve.references ?? []).slice(0, 8).map((r) => ({ url: r.url, source: r.source })),
+            },
+            kev: kev
+              ? {
+                  vendorProject: kev.vendorProject,
+                  product: kev.product,
+                  vulnerabilityName: kev.vulnerabilityName,
+                  dateAdded: kev.dateAdded,
+                  dueDate: kev.dueDate,
+                  requiredAction: kev.requiredAction,
+                }
+              : null,
+            cvss: {
+              score: metric?.cvssData?.baseScore ?? null,
+              vector: metric?.cvssData?.vectorString ?? null,
+              severity: rawSeverity ?? null,
+            },
+            updatedBy: { agent: "vuln", at: now.toISOString() },
+          } as never,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: [kgEntities.kind, kgEntities.entityId],
+          set: {
+            name: sql`excluded.name`,
+            description: sql`COALESCE(${kgEntities.description}, excluded.description)`,
+            attributes: sql`COALESCE(${kgEntities.attributes}, '{}'::jsonb) || excluded.attributes`,
+            updatedAt: now,
+          },
+        });
+    } catch (err) {
+      console.warn(`[VulnAgent] CVE entity upsert failed for ${cveId}:`, err);
     }
 
     // Upsert (ignore on conflict — dedup_hash is unique)

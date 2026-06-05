@@ -11,6 +11,7 @@
     "run:origin": "tsx src/agents/origin.ts",
     "run:malware": "tsx src/agents/malware.ts",
     "run:profile": "tsx src/agents/profile.ts",
+    "run:cve-enrich": "tsx src/agents/cve-enrich.ts",
     "run:merge": "tsx src/agents/merge.ts",
     "run:vector-smoke": "tsx src/agents/vector-smoke.ts",
     "run:all": "tsx src/run-all.ts",

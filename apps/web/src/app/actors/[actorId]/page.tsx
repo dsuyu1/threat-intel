@@ -1,4 +1,5 @@
-﻿export const runtime = "edge";
+export const runtime = "edge";
+export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -9,10 +10,12 @@ import {
   kgEvidence,
   kgRelations,
 } from "@ti/db";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { Pentagraph } from "../../../components/Pentagraph";
 import { EvidenceDetails } from "../../../components/EvidenceDetails";
 import { SectorWheel } from "../../../components/SectorWheel";
+import { SimilaritySpokes } from "../../../components/SimilaritySpokes";
 import { Markdown } from "../../../components/ui/Markdown";
 import { InfoTip } from "../../../components/ui/InfoTip";
 import { ActorIcon } from "../../../components/ui/ActorIcon";
@@ -159,6 +162,7 @@ async function getTopRelations(params: {
       confidence: kgRelations.confidence,
       name: kgEntities.name,
       description: kgEntities.description,
+      attributes: kgEntities.attributes,
     })
     .from(kgRelations)
     .leftJoin(
@@ -182,72 +186,142 @@ async function getTopRelations(params: {
     id: r.toId,
     name: r.name ?? r.toId,
     description: r.description ?? null,
+    attributes: (r.attributes ?? null) as unknown,
     support: r.support ?? 0,
     confidence: r.confidence ?? 0,
     evidence: evidenceByRel.get(r.relationId) ?? [],
   }));
 }
 
-async function getMitigationsFromTechniques(techniqueIds: string[]) {
-  if (techniqueIds.length === 0) return [];
+async function getActorFacetCounts(actorId: string) {
   const db = getDb();
-  const rows = await db
+
+  const [base] = await db
     .select({
-      relationId: kgRelations.id,
-      techniqueId: kgRelations.fromId,
-      mitigationId: kgRelations.toId,
-      mitigationName: kgEntities.name,
-      confidence: kgRelations.confidence,
-      support: kgRelations.support,
+      ttpCount: sql<number>`count(distinct case when ${kgRelations.type} = 'actor_uses_technique' then ${kgRelations.toId} end)`,
+      sectorCount: sql<number>`count(distinct case when ${kgRelations.type} = 'actor_targets_sector' then ${kgRelations.toId} end)`,
+      cveCount: sql<number>`count(distinct case when ${kgRelations.type} = 'actor_exploits_cve' then ${kgRelations.toId} end)`,
     })
     .from(kgRelations)
-    .leftJoin(
-      kgEntities,
-      and(eq(kgEntities.kind, "mitigation"), eq(kgEntities.entityId, kgRelations.toId))
+    .where(and(eq(kgRelations.fromKind, "actor"), eq(kgRelations.fromId, actorId)));
+
+  const a2t = alias(kgRelations, "a2t");
+  const t2m = alias(kgRelations, "t2m");
+
+  const [mit] = await db
+    .select({
+      mitigationCount: sql<number>`count(distinct ${t2m.toId})`,
+    })
+    .from(a2t)
+    .innerJoin(
+      t2m,
+      and(
+        eq(t2m.type, "technique_mitigated_by"),
+        eq(t2m.fromKind, "technique"),
+        eq(t2m.toKind, "mitigation"),
+        eq(t2m.fromId, a2t.toId)
+      )
     )
     .where(
       and(
-        eq(kgRelations.type, "technique_mitigated_by"),
-        eq(kgRelations.fromKind, "technique"),
-        eq(kgRelations.toKind, "mitigation"),
-        inArray(kgRelations.fromId, techniqueIds)
+        eq(a2t.type, "actor_uses_technique"),
+        eq(a2t.fromKind, "actor"),
+        eq(a2t.toKind, "technique"),
+        eq(a2t.fromId, actorId)
+      )
+    );
+
+  return {
+    ttpCount: Number(base?.ttpCount ?? 0),
+    sectorCount: Number(base?.sectorCount ?? 0),
+    cveCount: Number(base?.cveCount ?? 0),
+    mitigationCount: Number(mit?.mitigationCount ?? 0),
+  };
+}
+
+async function getTopMitigationsForActor(actorId: string) {
+  const db = getDb();
+  const a2t = alias(kgRelations, "a2t");
+  const t2m = alias(kgRelations, "t2m");
+
+  const top = await db
+    .select({
+      id: t2m.toId,
+      name: kgEntities.name,
+      count: sql<number>`count(*)`,
+    })
+    .from(a2t)
+    .innerJoin(
+      t2m,
+      and(
+        eq(t2m.type, "technique_mitigated_by"),
+        eq(t2m.fromKind, "technique"),
+        eq(t2m.toKind, "mitigation"),
+        eq(t2m.fromId, a2t.toId)
       )
     )
-    .orderBy(desc(kgRelations.support))
-    .limit(200);
+    .leftJoin(kgEntities, and(eq(kgEntities.kind, "mitigation"), eq(kgEntities.entityId, t2m.toId)))
+    .where(
+      and(
+        eq(a2t.type, "actor_uses_technique"),
+        eq(a2t.fromKind, "actor"),
+        eq(a2t.toKind, "technique"),
+        eq(a2t.fromId, actorId)
+      )
+    )
+    .groupBy(t2m.toId, kgEntities.name)
+    .orderBy(desc(sql`count(*)`))
+    .limit(10);
 
-  const byMit = new Map<
-    string,
-    { id: string; name: string; count: number; relationIds: string[] }
-  >();
+  const mitigationIds = top.map((t) => t.id);
+  if (mitigationIds.length === 0) return [];
 
-  for (const r of rows) {
-    const cur = byMit.get(r.mitigationId) ?? {
-      id: r.mitigationId,
-      name: r.mitigationName ?? r.mitigationId,
-      count: 0,
-      relationIds: [],
-    };
-    cur.count += 1;
-    cur.relationIds.push(r.relationId);
-    byMit.set(r.mitigationId, cur);
+  const relRows = await db
+    .select({
+      relationId: t2m.id,
+      mitigationId: t2m.toId,
+    })
+    .from(a2t)
+    .innerJoin(
+      t2m,
+      and(
+        eq(t2m.type, "technique_mitigated_by"),
+        eq(t2m.fromKind, "technique"),
+        eq(t2m.toKind, "mitigation"),
+        eq(t2m.fromId, a2t.toId)
+      )
+    )
+    .where(
+      and(
+        eq(a2t.type, "actor_uses_technique"),
+        eq(a2t.fromKind, "actor"),
+        eq(a2t.toKind, "technique"),
+        eq(a2t.fromId, actorId),
+        inArray(t2m.toId, mitigationIds)
+      )
+    )
+    .orderBy(desc(t2m.support))
+    .limit(300);
+
+  const relIdsByMit = new Map<string, string[]>();
+  for (const r of relRows) {
+    const cur = relIdsByMit.get(r.mitigationId) ?? [];
+    if (cur.length >= 8) continue;
+    cur.push(r.relationId);
+    relIdsByMit.set(r.mitigationId, cur);
   }
 
-  const mitigations = Array.from(byMit.values())
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10);
+  const evidenceByRel = await fetchEvidenceByRelationIds(relRows.map((r) => r.relationId), 2);
 
-  const evidenceByRel = await fetchEvidenceByRelationIds(
-    mitigations.flatMap((m) => m.relationIds),
-    2
-  );
-
-  return mitigations.map((m) => ({
-    id: m.id,
-    name: m.name,
-    count: m.count,
-    evidence: m.relationIds.flatMap((rid) => evidenceByRel.get(rid) ?? []).slice(0, 4),
-  }));
+  return top.map((m) => {
+    const relIds = relIdsByMit.get(m.id) ?? [];
+    return {
+      id: m.id,
+      name: m.name ?? m.id,
+      count: Number(m.count ?? 0),
+      evidence: relIds.flatMap((rid) => evidenceByRel.get(rid) ?? []).slice(0, 4),
+    };
+  });
 }
 
 async function getNeighbors(actorId: string) {
@@ -281,6 +355,15 @@ async function getNeighbors(actorId: string) {
   }));
 }
 
+function formatShownOfTotal(shown: number, total: number | null | undefined) {
+  const tRaw = Number(total);
+  if (!Number.isFinite(tRaw)) return String(shown);
+  const t = Math.max(0, Math.floor(tRaw));
+  if (t === 0) return "0";
+  if (shown >= t) return String(t);
+  return `${shown} / ${t}`;
+}
+
 export default async function ActorPage({
   params,
 }: {
@@ -305,16 +388,16 @@ export default async function ActorPage({
   const aliasesShown = aliasesUnique.slice(0, 6);
   const aliasesRemaining = Math.max(0, aliasesUnique.length - aliasesShown.length);
 
-  const [origins, sectors, techniques, cves, campaigns, neighbors] = await Promise.all([
+  const [origins, sectors, techniques, cves, campaigns, neighbors, facetCounts, mitigations] = await Promise.all([
     getTopRelations({ actorId, type: "actor_origin_country", toKind: "country", limit: 3 }),
     getTopRelations({ actorId, type: "actor_targets_sector", toKind: "sector", limit: 10 }),
     getTopRelations({ actorId, type: "actor_uses_technique", toKind: "technique", limit: 12 }),
     getTopRelations({ actorId, type: "actor_exploits_cve", toKind: "cve", limit: 12 }),
     getTopRelations({ actorId, type: "actor_attributed_campaign", toKind: "campaign", limit: 20 }),
     getNeighbors(actorId),
+    getActorFacetCounts(actorId),
+    getTopMitigationsForActor(actorId),
   ]);
-
-  const mitigations = await getMitigationsFromTechniques(techniques.slice(0, 8).map((t) => t.id));
 
   const sumSupport = (items: Array<{ support: number }>) =>
     items.reduce((acc, it) => acc + (Number.isFinite(it.support) ? Math.max(0, it.support) : 0), 0);
@@ -328,25 +411,25 @@ export default async function ActorPage({
     },
     {
       label: "Sectors",
-      value: sectors.length ? String(sectors.length) : "\u2014",
+      value: String(facetCounts.sectorCount),
       sub: "Weighted (decayed support)",
       weight: sumSupport(sectors),
     },
     {
       label: "TTPs",
-      value: techniques.length ? String(techniques.length) : "\u2014",
+      value: String(facetCounts.ttpCount),
       sub: "Explicit ATT&CK IDs only",
       weight: sumSupport(techniques),
     },
     {
       label: "CVEs",
-      value: cves.length ? String(cves.length) : "\u2014",
+      value: String(facetCounts.cveCount),
       sub: "Explicit CVEs only",
       weight: sumSupport(cves),
     },
     {
       label: "Mitigations",
-      value: mitigations.length ? String(mitigations.length) : "\u2014",
+      value: String(facetCounts.mitigationCount),
       sub: "Derived from ATT&CK",
       weight: mitigations.reduce((acc, m) => acc + (Number.isFinite(m.count) ? m.count : 0), 0),
     },
@@ -519,9 +602,12 @@ export default async function ActorPage({
                   body="Mitigations are derived from MITRE ATT&CK technique ↔ mitigation mappings."
                 />
               </div>
+              <span className="text-sm text-zinc-500 tabular-nums">
+                {formatShownOfTotal(mitigations.length, facetCounts.mitigationCount)}
+              </span>
             </div>
             <p className="mt-2 text-sm text-zinc-500">
-              Derived by mapping the actor&apos;s top techniques to MITRE ATT&amp;CK mitigations.
+              Derived by mapping the actor&apos;s techniques to MITRE ATT&amp;CK mitigations.
             </p>
             {mitigations.length ? (
               <MitigationBars items={mitigations} />
@@ -531,7 +617,12 @@ export default async function ActorPage({
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Target Sectors</h2>
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Target Sectors</h2>
+              <span className="text-sm text-zinc-500 tabular-nums">
+                {formatShownOfTotal(sectors.length, facetCounts.sectorCount)}
+              </span>
+            </div>
             <SectorWheel
               sectors={sectors.map((s) => ({
                 id: s.id,
@@ -549,51 +640,21 @@ export default async function ActorPage({
 
         <div className="space-y-10">
           <section>
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Similarities</h2>
-            </div>
-            {neighbors.length ? (
-              <ul className="mt-3 divide-y divide-zinc-200 dark:divide-zinc-900/80 rounded-xl border border-zinc-200 dark:border-zinc-900/80 bg-white/70 dark:bg-black/35">
-                {neighbors.map((n) => (
-                  <li key={n.actorId} className="p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <Link
-                        href={`/actors/${n.actorId}`}
-                        className="text-base font-medium text-zinc-900 dark:text-zinc-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors truncate"
-                      >
-                        {n.name}
-                      </Link>
-                      <span className="text-xs text-zinc-500 tabular-nums">
-                        {n.distance.toFixed(3)}
-                      </span>
-                    </div>
-                    {n.why ? (
-                      <details className="mt-2">
-                        <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
-                          Why?
-                        </summary>
-                        <pre className="mt-2 text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-black/40 border border-zinc-200 dark:border-zinc-900/80 rounded-lg p-3 overflow-auto">
-                          {JSON.stringify(n.why, null, 2)}
-                        </pre>
-                      </details>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-3 text-sm text-zinc-500">No neighbors computed yet.</p>
-            )}
+            <SimilaritySpokes center={{ actorId: actor.entityId, name: actor.name }} neighbors={neighbors} />
           </section>
         </div>
       </div>
 
-      <section className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="space-y-4">
-          <FacetCard title="Origin Countries" items={origins} />
-        </div>
-        <div className="space-y-4">
-          <FacetCard title="Top TTPs (ATT&CK)" items={techniques} />
-          <FacetRow title="Top CVEs" items={cves} />
+      <section className="mt-10 space-y-4">
+        <TopTtpSection items={techniques} totalCount={facetCounts.ttpCount} />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="space-y-4">
+            <FacetCard title="Origins" items={origins} />
+          </div>
+          <div className="space-y-4">
+            <FacetRow title="Top CVEs" items={cves} totalCount={facetCounts.cveCount} />
+          </div>
         </div>
       </section>
     </div>
@@ -609,6 +670,7 @@ function FacetCard({
     id: string;
     name: string;
     description: string | null;
+    attributes?: unknown;
     support: number;
     confidence: number;
     evidence: EvidenceItem[];
@@ -632,11 +694,23 @@ function FacetCard({
                 </div>
                 <div className="text-right text-xs text-zinc-500 shrink-0">
                   <div>
-                    <span className="text-zinc-600">Score</span>{" "}
+                    <span className="inline-flex items-center gap-1 text-zinc-600">
+                      Score
+                      <InfoTip
+                        title="Score"
+                        body="A decayed support score for this relationship. Each observation adds (source reliability × extraction confidence). Older observations decay with a 30‑day half‑life."
+                      />
+                    </span>{" "}
                     <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-200">{it.support.toFixed(2)}</span>
                   </div>
                   <div>
-                    <span className="text-zinc-600">Confidence</span>{" "}
+                    <span className="inline-flex items-center gap-1 text-zinc-600">
+                      Confidence
+                      <InfoTip
+                        title="Confidence"
+                        body="How sure we are the relationship is real (0–100%). This is the highest confidence seen in evidence, not how often it appears."
+                      />
+                    </span>{" "}
                     <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-200">
                       {Math.round(it.confidence * 100)}%
                     </span>
@@ -661,22 +735,157 @@ function FacetCard({
 function FacetRow({
   title,
   items,
+  autoScroll,
+  totalCount,
 }: {
   title: string;
   items: Array<{
     id: string;
     name: string;
     description: string | null;
+    attributes?: unknown;
     support: number;
     confidence: number;
     evidence: EvidenceItem[];
   }>;
+  autoScroll?: boolean;
+  totalCount?: number;
 }) {
+  if (autoScroll) {
+    return (
+      <details className="ttprow group rounded-xl border border-zinc-200 dark:border-zinc-900/80 bg-white/70 dark:bg-black/35">
+        <style>{`
+          @keyframes facet-row-marquee {
+            from { transform: translateX(-50%); }
+            to   { transform: translateX(0); }
+          }
+          details.ttprow[open] .ttprow-marquee { display: none; }
+          details.ttprow:not([open]) .ttprow-full { display: none; }
+          @media (prefers-reduced-motion: reduce) {
+            .facet-row-marquee { animation: none !important; transform: none !important; }
+          }
+        `}</style>
+
+        <summary className="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 pt-4">
+          <div className="flex items-baseline justify-between gap-4">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="text-xs text-zinc-500 tabular-nums">{formatShownOfTotal(items.length, totalCount)}</span>
+              <span className="text-xs text-zinc-500 inline-flex items-center gap-1">
+                Expand
+                <span className="text-zinc-500 group-open:rotate-180 transition-transform" aria-hidden="true">
+                  ▾
+                </span>
+              </span>
+            </div>
+          </div>
+        </summary>
+
+        {items.length ? (
+          <>
+            {/* Closed: slow infinite marquee (duplicates for seamless loop) */}
+            <div className="ttprow-marquee mt-3 overflow-hidden px-4 pb-4">
+              <ul className="flex w-max gap-3 facet-row-marquee hover:[animation-play-state:paused] motion-safe:animate-[facet-row-marquee_55s_linear_infinite]">
+                {[...items, ...items].map((it, idx) => (
+                  <li
+                    key={`${it.id}:${idx}`}
+                    aria-hidden={idx >= items.length ? true : undefined}
+                    className="min-w-[220px] shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-900/80 bg-white/60 dark:bg-black/30 px-3 py-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{it.name}</div>
+                        <div className="text-[11px] text-zinc-500 tabular-nums tracking-wide">{it.id}</div>
+                      </div>
+                      <div className="text-right text-[11px] text-zinc-500 shrink-0">
+                        <div>
+                          <span className="inline-flex items-center gap-1 text-zinc-600">
+                            Score
+                            <InfoTip
+                              title="Score"
+                              body="A decayed support score for this relationship. Each observation adds (source reliability × extraction confidence). Older observations decay with a 30‑day half‑life."
+                            />
+                          </span>{" "}
+                          <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-200">{it.support.toFixed(2)}</span>
+                        </div>
+                        <div>
+                          <span className="inline-flex items-center gap-1 text-zinc-600">
+                            Confidence
+                            <InfoTip
+                              title="Confidence"
+                              body="How sure we are the relationship is real (0–100%). This is the highest confidence seen in evidence, not how often it appears."
+                            />
+                          </span>{" "}
+                          <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-200">
+                            {Math.round(it.confidence * 100)}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <EvidenceDetails evidence={it.evidence} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Open: show all items once (manual scroll) */}
+            <div className="ttprow-full mt-3 px-4 pb-4">
+              <ul className="flex gap-3 overflow-x-auto">
+                {items.map((it) => (
+                  <li
+                    key={it.id}
+                    className="min-w-[220px] shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-900/80 bg-white/60 dark:bg-black/30 px-3 py-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{it.name}</div>
+                        <div className="text-[11px] text-zinc-500 tabular-nums tracking-wide">{it.id}</div>
+                      </div>
+                      <div className="text-right text-[11px] text-zinc-500 shrink-0">
+                        <div>
+                          <span className="inline-flex items-center gap-1 text-zinc-600">
+                            Score
+                            <InfoTip
+                              title="Score"
+                              body="A decayed support score for this relationship. Each observation adds (source reliability × extraction confidence). Older observations decay with a 30‑day half‑life."
+                            />
+                          </span>{" "}
+                          <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-200">{it.support.toFixed(2)}</span>
+                        </div>
+                        <div>
+                          <span className="inline-flex items-center gap-1 text-zinc-600">
+                            Confidence
+                            <InfoTip
+                              title="Confidence"
+                              body="How sure we are the relationship is real (0–100%). This is the highest confidence seen in evidence, not how often it appears."
+                            />
+                          </span>{" "}
+                          <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-200">
+                            {Math.round(it.confidence * 100)}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <EvidenceDetails evidence={it.evidence} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </>
+        ) : (
+          <p className="px-4 py-4 text-sm text-zinc-500">No data yet.</p>
+        )}
+      </details>
+    );
+  }
+
   return (
     <section className="rounded-xl border border-zinc-200 dark:border-zinc-900/80 bg-white/70 dark:bg-black/35">
       <div className="flex items-baseline justify-between px-4 pt-4">
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
-        <span className="text-xs text-zinc-500">{items.length}</span>
+        <span className="text-xs text-zinc-500 tabular-nums">{formatShownOfTotal(items.length, totalCount)}</span>
       </div>
 
       {items.length ? (
@@ -693,11 +902,23 @@ function FacetRow({
                 </div>
                 <div className="text-right text-[11px] text-zinc-500 shrink-0">
                   <div>
-                    <span className="text-zinc-600">Score</span>{" "}
+                    <span className="inline-flex items-center gap-1 text-zinc-600">
+                      Score
+                      <InfoTip
+                        title="Score"
+                        body="A decayed support score for this relationship. Each observation adds (source reliability × extraction confidence). Older observations decay with a 30‑day half‑life."
+                      />
+                    </span>{" "}
                     <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-200">{it.support.toFixed(2)}</span>
                   </div>
                   <div>
-                    <span className="text-zinc-600">Conf</span>{" "}
+                    <span className="inline-flex items-center gap-1 text-zinc-600">
+                      Confidence
+                      <InfoTip
+                        title="Confidence"
+                        body="How sure we are the relationship is real (0–100%). This is the highest confidence seen in evidence, not how often it appears."
+                      />
+                    </span>{" "}
                     <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-200">
                       {Math.round(it.confidence * 100)}%
                     </span>
@@ -713,6 +934,245 @@ function FacetRow({
         <p className="px-4 py-4 text-sm text-zinc-500">No data yet.</p>
       )}
     </section>
+  );
+}
+
+const ATTACK_TACTIC_ORDER = [
+  "Reconnaissance",
+  "Resource Development",
+  "Initial Access",
+  "Execution",
+  "Persistence",
+  "Privilege Escalation",
+  "Defense Evasion",
+  "Credential Access",
+  "Discovery",
+  "Lateral Movement",
+  "Collection",
+  "Command & Control",
+  "Exfiltration",
+  "Impact",
+] as const;
+type AttackTactic = (typeof ATTACK_TACTIC_ORDER)[number];
+
+function getTechniqueTacticsFromAttributes(attrs: unknown): AttackTactic[] {
+  if (!attrs || typeof attrs !== "object") return [];
+  const obj = attrs as any;
+
+  const raw =
+    obj["tactics"] ??
+    obj["mitreAttack"]?.["tactics"] ??
+    obj["attack"]?.["tactics"] ??
+    obj["attackTactics"] ??
+    null;
+
+  if (!Array.isArray(raw)) return [];
+
+  const set = new Set<AttackTactic>();
+  for (const t of raw) {
+    const v = typeof t === "string" ? t.trim() : "";
+    if (!v) continue;
+    if ((ATTACK_TACTIC_ORDER as readonly string[]).includes(v)) set.add(v as AttackTactic);
+  }
+  return Array.from(set);
+}
+
+function pickPrimaryTactic(tactics: AttackTactic[]): AttackTactic | null {
+  for (const t of ATTACK_TACTIC_ORDER) if (tactics.includes(t)) return t;
+  return tactics[0] ?? null;
+}
+
+function TechniqueCard({ it }: { it: { id: string; name: string; support: number; confidence: number; evidence: EvidenceItem[] } }) {
+  return (
+    <div className="rounded-lg border border-zinc-200 dark:border-zinc-900/80 bg-white/60 dark:bg-black/30 px-3 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{it.name}</div>
+          <div className="text-[11px] text-zinc-500 tabular-nums tracking-wide">{it.id}</div>
+        </div>
+        <div className="text-right text-[11px] text-zinc-500 shrink-0">
+          <div>
+            <span className="inline-flex items-center gap-1 text-zinc-600">
+              Score
+              <InfoTip
+                title="Score"
+                body="A decayed support score for this relationship. Each observation adds (source reliability × extraction confidence). Older observations decay with a 30‑day half‑life."
+              />
+            </span>{" "}
+            <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-200">{it.support.toFixed(2)}</span>
+          </div>
+          <div>
+            <span className="inline-flex items-center gap-1 text-zinc-600">
+              Confidence
+              <InfoTip
+                title="Confidence"
+                body="How sure we are the relationship is real (0–100%). This is the highest confidence seen in evidence, not how often it appears."
+              />
+            </span>{" "}
+            <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-200">
+              {Math.round(it.confidence * 100)}%
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <EvidenceDetails evidence={it.evidence} />
+    </div>
+  );
+}
+
+function FlowConnector() {
+  return (
+    <>
+      {/* Desktop: left-to-right connector */}
+      <div className="hidden md:flex items-center justify-center px-2" aria-hidden="true">
+        <div className="h-px w-6 bg-zinc-200/80 dark:bg-zinc-800/80" />
+        <div className="-ml-1 text-zinc-400 dark:text-zinc-600">→</div>
+      </div>
+
+      {/* Mobile: top-to-bottom connector */}
+      <div className="md:hidden flex items-center justify-center py-2" aria-hidden="true">
+        <div className="w-px h-6 bg-zinc-200/80 dark:bg-zinc-800/80" />
+        <div className="mx-2 text-zinc-400 dark:text-zinc-600">↓</div>
+        <div className="w-px h-6 bg-zinc-200/80 dark:bg-zinc-800/80" />
+      </div>
+    </>
+  );
+}
+
+function TopTtpSection({
+  items,
+  totalCount,
+}: {
+  items: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    attributes?: unknown;
+    support: number;
+    confidence: number;
+    evidence: EvidenceItem[];
+  }>;
+  totalCount?: number;
+}) {
+  const itemsWithTactics = items.map((it) => ({
+    ...it,
+    tactics: getTechniqueTacticsFromAttributes(it.attributes),
+  }));
+
+  const byTactic = new Map<AttackTactic, typeof itemsWithTactics>();
+  const unmapped: typeof itemsWithTactics = [];
+  for (const it of itemsWithTactics) {
+    const primary = pickPrimaryTactic(it.tactics);
+    if (!primary) {
+      unmapped.push(it);
+      continue;
+    }
+    const cur = byTactic.get(primary) ?? [];
+    cur.push(it);
+    byTactic.set(primary, cur);
+  }
+
+  const groups = ATTACK_TACTIC_ORDER
+    .filter((t) => (byTactic.get(t)?.length ?? 0) > 0)
+    .map((t) => ({ tactic: t, items: byTactic.get(t)! }));
+
+  return (
+    <details className="group rounded-xl border border-zinc-200 dark:border-zinc-900/80 bg-white/70 dark:bg-black/35">
+      <summary className="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none">
+        <div className="flex items-baseline justify-between px-4 pt-4 pb-3">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Top TTPs (ATT&amp;CK)</h2>
+            <p className="mt-1 text-xs text-zinc-500 group-open:hidden">Hover to pause; expand to view all grouped by tactic.</p>
+            <p className="mt-1 text-xs text-zinc-500 hidden group-open:block">
+              Grouped by MITRE ATT&amp;CK Enterprise tactic order.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <span className="text-xs text-zinc-500 tabular-nums">{formatShownOfTotal(items.length, totalCount)}</span>
+            <span className="text-xs text-zinc-700 dark:text-zinc-300 group-open:hidden">Expand</span>
+            <span className="text-xs text-zinc-700 dark:text-zinc-300 hidden group-open:inline">Collapse</span>
+          </div>
+        </div>
+      </summary>
+
+      {items.length ? (
+        <div className="px-4 pb-4">
+          {/* Collapsed view: existing marquee row */}
+          <div className="group-open:hidden overflow-hidden">
+            <style>{`
+              @keyframes facet-row-marquee {
+                from { transform: translateX(0); }
+                to   { transform: translateX(-50%); }
+              }
+              @media (prefers-reduced-motion: reduce) {
+                .facet-row-marquee { animation: none !important; transform: none !important; }
+              }
+            `}</style>
+            <ul className="flex w-max gap-3 facet-row-marquee hover:[animation-play-state:paused] motion-safe:animate-[facet-row-marquee_55s_linear_infinite]">
+              {[...items, ...items].map((it, idx) => (
+                <li
+                  key={`${it.id}:${idx}`}
+                  aria-hidden={idx >= items.length ? true : undefined}
+                  className="min-w-[220px] shrink-0"
+                >
+                  <TechniqueCard it={it} />
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Expanded view: grouped by tactic */}
+          <div className="hidden group-open:block">
+            {groups.length ? (
+              <div className="mt-2 flex flex-col md:flex-row md:items-start md:overflow-x-auto md:pb-2">
+                {groups.map((g, idx) => (
+                  <div key={g.tactic} className="flex flex-col md:flex-row md:items-stretch">
+                    <div className="md:min-w-[320px] md:max-w-[360px]">
+                      <div className="flex items-baseline justify-between">
+                        <div className="text-xs font-semibold tracking-wide uppercase text-zinc-600 dark:text-zinc-400">
+                          {g.tactic}
+                        </div>
+                        <div className="text-xs text-zinc-500 tabular-nums">{g.items.length}</div>
+                      </div>
+                      <div className="mt-2 space-y-3">
+                        {g.items.map((it) => (
+                          <TechniqueCard key={it.id} it={it} />
+                        ))}
+                      </div>
+                    </div>
+
+                    {idx < groups.length - 1 ? <FlowConnector /> : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-2">
+                <p className="text-sm text-zinc-500">
+                  No tactic mapping available for these techniques yet.
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Tactics are pulled from MITRE ATT&amp;CK technique metadata. If this actor&apos;s techniques were added from OSINT first, re-sync ATT&amp;CK data to populate tactics.
+                </p>
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {items.map((it) => (
+                    <TechniqueCard key={it.id} it={it} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {unmapped.length && groups.length ? (
+              <p className="mt-3 text-xs text-zinc-500">
+                {unmapped.length} technique{unmapped.length === 1 ? "" : "s"} missing tactic mapping.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <p className="px-4 pb-4 text-sm text-zinc-500">No data yet.</p>
+      )}
+    </details>
   );
 }
 

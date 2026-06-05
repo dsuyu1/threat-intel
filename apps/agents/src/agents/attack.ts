@@ -95,7 +95,7 @@ Return STRICT JSON with these keys: actors, origin_countries, target_sectors, te
 
 Rules:
 - Use ISO2 for origin countries (e.g., RU, CN, IR, KP, US). If unknown, omit.
-- target_sectors.sector MUST be one of: ${SECTORS.join(", ")}.
+- target_sectors.sector SHOULD be one of: ${SECTORS.join(", ")}. If the text implies a sector, choose the closest option.
 - techniques.technique MUST be an explicit ATT&CK ID like T1059 or T1059.001 (if not explicit, omit).
 - cves.cve MUST match CVE-YYYY-NNNN (if not explicit, omit).
 - Every record must include an excerpt quote (<= 200 chars) and chunk_index where that quote came from (or null if unclear).

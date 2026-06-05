@@ -1,4 +1,5 @@
 export const runtime = "edge";
+export const dynamic = "force-dynamic";
 
 import { getDb, kgEntities, kgRelations } from "@ti/db";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";

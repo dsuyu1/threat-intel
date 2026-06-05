@@ -1,9 +1,10 @@
-export const runtime = "edge";
+﻿export const runtime = "edge";
 
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Script from "next/script";
 import { DotCursor } from "../components/DotCursor";
+import { RouteLoadingOverlay } from "../components/RouteLoadingOverlay";
 import { ThemeToggle } from "../components/ThemeToggle";
 import "./globals.css";
 
@@ -41,6 +42,7 @@ export default function RootLayout({
           </div>
         </nav>
         <main className="flex-1 min-h-0">{children}</main>
+        <RouteLoadingOverlay />
         <DotCursor />
       </body>
     </html>
@@ -93,3 +95,4 @@ function Nav() {
     </nav>
   );
 }
+

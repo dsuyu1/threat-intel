@@ -60,6 +60,7 @@ type StixIntrusionSet = StixBase & {
 type StixTechnique = StixBase & {
   type: "attack-pattern";
   external_references?: StixExternalRef[];
+  kill_chain_phases?: Array<{ kill_chain_name?: string; phase_name?: string }>;
 };
 
 type StixMitigation = StixBase & {
@@ -147,6 +148,41 @@ function getAttackCitations(refs: StixExternalRef[] | undefined): Array<{ name: 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+const ATTACK_TACTIC_LABEL_BY_PHASE: Record<string, string> = {
+  reconnaissance: "Reconnaissance",
+  "resource-development": "Resource Development",
+  "initial-access": "Initial Access",
+  execution: "Execution",
+  persistence: "Persistence",
+  "privilege-escalation": "Privilege Escalation",
+  "defense-evasion": "Defense Evasion",
+  "credential-access": "Credential Access",
+  discovery: "Discovery",
+  "lateral-movement": "Lateral Movement",
+  collection: "Collection",
+  "command-and-control": "Command & Control",
+  exfiltration: "Exfiltration",
+  impact: "Impact",
+};
+
+function getTechniqueTacticsFromKillChainPhases(phases: unknown): string[] {
+  if (!Array.isArray(phases)) return [];
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const p of phases) {
+    if (!p || typeof p !== "object") continue;
+    const phase = typeof (p as any).phase_name === "string" ? (p as any).phase_name.trim().toLowerCase() : "";
+    if (!phase) continue;
+    const label = ATTACK_TACTIC_LABEL_BY_PHASE[phase];
+    if (!label) continue;
+    if (seen.has(label)) continue;
+    seen.add(label);
+    out.push(label);
+  }
   return out;
 }
 
@@ -467,13 +503,18 @@ export async function runTtpAgent() {
       const tid = getAttackExternalId(tech.external_references);
       if (!tid || !tech.name) continue;
 
+      const tactics = getTechniqueTacticsFromKillChainPhases((tech as any).kill_chain_phases);
       techniqueById.set(tid, {
         kind: "technique",
         entityId: tid,
         name: tech.name,
         aliases: null,
         description: tech.description ?? null,
-        attributes: { source: "mitre-attack", citations: getAttackCitations(tech.external_references) },
+        attributes: {
+          source: "mitre-attack",
+          citations: getAttackCitations(tech.external_references),
+          tactics,
+        },
       });
       idMap.set(tech.id, { kind: "technique", entityId: tid });
     } else if (obj.type === "course-of-action") {

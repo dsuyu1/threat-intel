@@ -11,6 +11,7 @@
       "persistent": true
     },
     "lint": {},
+    "test": {},
     "typecheck": {},
     "db:generate": { "cache": false },
     "db:migrate": { "cache": false }

@@ -66,7 +66,7 @@ export function FindingCard({ finding, teaser = false }: Props) {
             </span>
 
             {finding.cveId && (
-              <span className="text-xs font-mono text-gray-400">
+              <span className="text-xs text-gray-400 tabular-nums tracking-wide">
                 {finding.cveId}
               </span>
             )}

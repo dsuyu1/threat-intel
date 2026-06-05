@@ -8,7 +8,11 @@
     "run:exploit": "tsx src/agents/exploit.ts",
     "run:attack": "tsx src/agents/attack.ts",
     "run:ttp": "tsx src/agents/ttp.ts",
+    "run:origin": "tsx src/agents/origin.ts",
     "run:malware": "tsx src/agents/malware.ts",
+    "run:profile": "tsx src/agents/profile.ts",
+    "run:merge": "tsx src/agents/merge.ts",
+    "run:vector-smoke": "tsx src/agents/vector-smoke.ts",
     "run:all": "tsx src/run-all.ts",
     "build": "tsc --noEmit",
     "deploy": "serverless deploy --stage prod",
@@ -20,16 +24,24 @@
   },
   "dependencies": {
     "@ti/db": "workspace:*",
-    "openai": "^4.47.0"
+    "@neondatabase/serverless": "^0.9.0",
+    "dotenv": "^16.6.1",
+    "drizzle-orm": "^0.30.0",
+    "html-to-text": "^10.0.0",
+    "openai": "^4.47.0",
+    "rss-parser": "^3.13.0",
+    "stream-chain": "^3.6.3",
+    "stream-json": "^2.1.0"
   },
   "devDependencies": {
-    "serverless": "^3.38.0",
-    "serverless-esbuild": "^1.52.0",
     "@aws-sdk/client-ssm": "^3.0.0",
     "@types/aws-lambda": "^8.10.0",
+    "@types/html-to-text": "^9.0.4",
+    "@types/node": "^20.0.0",
     "esbuild": "^0.21.0",
+    "serverless": "^3.38.0",
+    "serverless-esbuild": "^1.52.0",
     "tsx": "^4.11.0",
-    "typescript": "^5.4.0",
-    "@types/node": "^20.0.0"
+    "typescript": "^5.4.0"
   }
 }

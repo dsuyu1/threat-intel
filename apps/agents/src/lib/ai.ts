@@ -1,42 +1,15 @@
 /**
  * AI summarization helpers.
  *
- * Supports Gemini (via OpenAI-compatible endpoint) or OpenAI.
- * Priority: GEMINI_API_KEY → OPENAI_API_KEY
+ * Supports Gemini (direct API) or OpenAI/OpenAI-compatible APIs.
  *
  * Set in .env.local:
- *   GEMINI_API_KEY=your-key   ← recommended (free tier available)
- *   AI_MODEL=gemini-2.0-flash ← optional override
+ *   OPENAI_API_KEY=...        ← or any OpenAI-compatible key
+ *   OPENAI_BASE_URL=...       ← required for OpenAI-compatible providers (optional for OpenAI)
+ *   AI_MODEL=...              ← optional override
  */
 
-import OpenAI from "openai";
-
-let _client: OpenAI | null = null;
-
-function getClient(): OpenAI {
-  if (_client) return _client;
-
-  const geminiKey = process.env["GEMINI_API_KEY"];
-  const openaiKey = process.env["OPENAI_API_KEY"];
-
-  if (geminiKey) {
-    _client = new OpenAI({
-      apiKey: geminiKey,
-      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
-    });
-  } else if (openaiKey) {
-    _client = new OpenAI({ apiKey: openaiKey });
-  } else {
-    throw new Error("Set GEMINI_API_KEY or OPENAI_API_KEY in .env.local");
-  }
-
-  return _client;
-}
-
-function getModel(): string {
-  if (process.env["AI_MODEL"]) return process.env["AI_MODEL"];
-  return process.env["GEMINI_API_KEY"] ? "gemini-2.0-flash" : "gpt-4o-mini";
-}
+import { generateText } from "./openai.js";
 
 // ─── VulnAgent summarizer ─────────────────────────────────────────────────────
 
@@ -67,14 +40,8 @@ Description: ${description}
 
 Write only the summary. No bullet points. No headers.`;
 
-  const res = await getClient().chat.completions.create({
-    model: getModel(),
-    messages: [{ role: "user", content: prompt }],
-    max_tokens: 200,
-    temperature: 0.2,
-  });
-
-  return res.choices[0]?.message.content?.trim() ?? description.slice(0, 300);
+  const content = await generateText({ prompt, maxTokens: 200, temperature: 0.2 });
+  return content.trim() || description.slice(0, 300);
 }
 
 // ─── AttackAgent summarizer ───────────────────────────────────────────────────
@@ -93,16 +60,10 @@ Title: ${input.title}
 Source: ${input.sourceUrl}
 Content: ${input.content.slice(0, 1500)}
 
-Write only the summary. No bullet points.`;
+  Write only the summary. No bullet points.`;
 
-  const res = await getClient().chat.completions.create({
-    model: getModel(),
-    messages: [{ role: "user", content: prompt }],
-    max_tokens: 200,
-    temperature: 0.2,
-  });
-
-  return res.choices[0]?.message.content?.trim() ?? input.title;
+  const content = await generateText({ prompt, maxTokens: 200, temperature: 0.2 });
+  return content.trim() || input.title;
 }
 
 // ─── ExploitAgent summarizer ──────────────────────────────────────────────────
@@ -122,14 +83,8 @@ Stars: ${input.stars}
 Description: ${input.repoDescription}
 Time from CVE disclosure to PoC: ${input.hoursToPoC != null ? `${input.hoursToPoC} hours` : "unknown"}
 
-Write 2 sentences for a security team: what this PoC demonstrates and why the timing and star count matter for patch urgency.`;
+  Write 2 sentences for a security team: what this PoC demonstrates and why the timing and star count matter for patch urgency.`;
 
-  const res = await getClient().chat.completions.create({
-    model: getModel(),
-    messages: [{ role: "user", content: prompt }],
-    max_tokens: 150,
-    temperature: 0.2,
-  });
-
-  return res.choices[0]?.message.content?.trim() ?? `PoC published for ${input.cveId}`;
+  const content = await generateText({ prompt, maxTokens: 150, temperature: 0.2 });
+  return content.trim() || `PoC published for ${input.cveId}`;
 }

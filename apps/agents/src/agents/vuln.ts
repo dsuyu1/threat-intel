@@ -6,6 +6,7 @@
  * Cron: every 6 hours via AWS EventBridge or Cloudflare Cron
  */
 
+import "../lib/env.js";
 import crypto from "node:crypto";
 import { getDb, findings } from "@ti/db";
 import { summarizeVuln } from "../lib/ai.js";
@@ -135,7 +136,7 @@ export async function runVulnAgent() {
   const kevMap = new Map(kevItems.map((k) => [k.cveID, k]));
 
   console.log(
-    `[VulnAgent] NVD: ${nvdItems.length} CVEs | KEV catalog: ${kevItems.size ?? kevItems.length} entries`
+    `[VulnAgent] NVD: ${nvdItems.length} CVEs | KEV catalog: ${kevItems.length} entries`
   );
 
   let inserted = 0;

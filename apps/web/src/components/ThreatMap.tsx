@@ -85,7 +85,6 @@ export function ThreatMap({ findings }: Props) {
       .then((topo) => {
         // Convert TopoJSON → GeoJSON inline (avoid topojson dep)
         const { feature } = require("topojson-client") as typeof import("topojson-client");
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const geo = (feature(topo, topo.objects.countries) as any) as FeatureCollection;
         setWorldData(geo);
       })
@@ -195,7 +194,7 @@ export function ThreatMap({ findings }: Props) {
       .append("circle")
       .attr("r", 4)
       .attr("fill", (d) => AGENT_COLOR[d.agent] ?? "#3b82f6")
-      .attr("stroke", "#09090b") // zinc-950
+      .attr("stroke", "#141414") // dark bg
       .attr("stroke-width", 1.5)
       .attr("opacity", 0.9);
 
@@ -259,7 +258,7 @@ export function ThreatMap({ findings }: Props) {
         ref={svgRef}
         viewBox={`0 0 ${dimensions.width} ${dimensions.height}`}
         width="100%"
-        className="block bg-[#09090b]"
+        className="block bg-[#141414]"
       />
 
       {/* Popup */}
@@ -290,7 +289,7 @@ export function ThreatMap({ findings }: Props) {
                 {AGENT_LABEL[popup.finding.agent]}
               </span>
               {popup.finding.cveId && (
-                <span className="text-xs font-mono text-zinc-400">
+                <span className="text-xs text-zinc-400 tabular-nums tracking-wide">
                   {popup.finding.cveId}
                 </span>
               )}

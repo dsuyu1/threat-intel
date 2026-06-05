@@ -16,11 +16,9 @@ export const runtime = "edge";
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, findings } from "@ti/db";
 import { desc, eq, and } from "drizzle-orm";
-import { auth } from "@clerk/nextjs/server";
 
 export async function GET(req: NextRequest) {
-  const { userId } = await auth();
-  const isPro = await checkProTier(userId);
+  const isPro = false;
 
   const { searchParams } = req.nextUrl;
   const agent = searchParams.get("agent") as string | null;
@@ -68,17 +66,4 @@ export async function GET(req: NextRequest) {
       isPro,
     },
   });
-}
-
-async function checkProTier(userId: string | null): Promise<boolean> {
-  if (!userId) return false;
-  const db = getDb();
-  const { users } = await import("@ti/db");
-  const { eq } = await import("drizzle-orm");
-  const [user] = await db
-    .select({ tier: users.tier })
-    .from(users)
-    .where(eq(users.clerkId, userId))
-    .limit(1);
-  return user?.tier === "pro";
 }

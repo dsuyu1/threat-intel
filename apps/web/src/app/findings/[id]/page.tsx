@@ -45,9 +45,11 @@ export default async function FindingPage({
         </Link>
         <h1 className="text-xl font-semibold text-zinc-100">{finding.title}</h1>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500">
-          <span className="font-mono">{finding.agent}</span>
-          {finding.cveId && <span className="font-mono">{finding.cveId}</span>}
-          {finding.severity && <span className="font-mono">{finding.severity}</span>}
+          <span className="tracking-wide">{finding.agent}</span>
+          {finding.cveId && <span className="tabular-nums tracking-wide">{finding.cveId}</span>}
+          {finding.severity && (
+            <span className="tabular-nums tracking-wide">{finding.severity}</span>
+          )}
           {finding.publishedAt && (
             <span>
               {new Date(finding.publishedAt).toLocaleString(undefined, {
@@ -75,12 +77,12 @@ export default async function FindingPage({
           <div className="text-sm text-zinc-300 space-y-1">
             {finding.cvssScore && (
               <div className="flex items-center gap-2">
-                <span className="text-zinc-500 text-xs font-mono">CVSS</span>
-                <span className="font-mono">{parseFloat(finding.cvssScore).toFixed(1)}</span>
+                <span className="text-zinc-500 text-xs">CVSS</span>
+                <span className="tabular-nums font-medium">{parseFloat(finding.cvssScore).toFixed(1)}</span>
               </div>
             )}
             {finding.cvssVector && (
-              <div className="text-xs font-mono text-zinc-400 break-all">
+              <div className="text-xs text-zinc-400 break-all tabular-nums">
                 {finding.cvssVector}
               </div>
             )}

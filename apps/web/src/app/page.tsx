@@ -1,38 +1,41 @@
 export const runtime = "edge";
 
-import { getDb, findings } from "@ti/db";
-import { desc } from "drizzle-orm";
+import { getDb, kgRelations } from "@ti/db";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { GlobeLoader } from "../components/GlobeLoader";
-import { inferCoords } from "../lib/geo";
-import type { MapFinding } from "../components/ThreatMap";
+import type { CountryHeat } from "../lib/country-heat";
+import { toIsoStringSafe } from "../lib/dates";
 
-async function getMapFindings(): Promise<MapFinding[]> {
+async function getCountryHeat(): Promise<CountryHeat[]> {
   const db = getDb();
   const rows = await db
     .select({
-      id:          findings.id,
-      agent:       findings.agent,
-      title:       findings.title,
-      summary:     findings.summary,
-      severity:    findings.severity,
-      cvssScore:   findings.cvssScore,
-      cveId:       findings.cveId,
-      tags:        findings.tags,
-      publishedAt: findings.publishedAt,
+      iso2: kgRelations.toId,
+      heat: sql<number>`sum(${kgRelations.support})`,
+      actorCount: sql<number>`count(distinct ${kgRelations.fromId})`,
+      lastSeen: sql<string | Date | null>`max(${kgRelations.lastSeen})`,
     })
-    .from(findings)
-    .orderBy(desc(findings.publishedAt))
-    .limit(200);
+    .from(kgRelations)
+    .where(
+      and(
+        eq(kgRelations.type, "actor_origin_country"),
+        eq(kgRelations.fromKind, "actor"),
+        eq(kgRelations.toKind, "country")
+      )
+    )
+    .groupBy(kgRelations.toId)
+    .orderBy(desc(sql`max(${kgRelations.lastSeen})`))
+    .limit(300);
 
-  return rows.map(r => ({
-    ...r,
-    publishedAt: r.publishedAt?.toISOString() ?? null,
-    coords:      inferCoords(r.tags, r.agent, r.id),
-    href:        `/findings/${r.id}`,
+  return rows.map((r) => ({
+    iso2: r.iso2,
+    heat: Number(r.heat ?? 0),
+    actorCount: Number(r.actorCount ?? 0),
+    lastSeen: toIsoStringSafe(r.lastSeen),
   }));
 }
 
 export default async function HomePage() {
-  const mapFindings = await getMapFindings();
-  return <GlobeLoader findings={mapFindings} />;
+  const countryHeat = await getCountryHeat();
+  return <GlobeLoader countryHeat={countryHeat} />;
 }

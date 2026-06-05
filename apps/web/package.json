@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbo",
     "build": "next build",
     "pages:build": "next-on-pages",
     "start": "next start",
@@ -19,6 +19,8 @@
     "next": "^15.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "stripe": "^15.0.0",
     "tailwind-merge": "^2.3.0",
     "three": "^0.165.0",
@@ -33,6 +35,8 @@
     "@types/react-dom": "^19.0.0",
     "@types/three": "^0.165.0",
     "@types/topojson-client": "^3.1.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "15.5.19",
     "postcss": "^8.4.0",
     "tailwindcss": "^4.1.8",
     "typescript": "^5.4.0"

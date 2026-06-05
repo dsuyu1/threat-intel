@@ -39,7 +39,11 @@ import {
 } from "../lib/sources.js";
 import { normalizeAlias } from "../lib/kg.js";
 
-type StixExternalRef = { source_name?: string; external_id?: string };
+type StixExternalRef = {
+  source_name?: string;
+  external_id?: string;
+  url?: string;
+};
 
 type StixBase = { id: string; type: string; name?: string; description?: string };
 
@@ -111,6 +115,29 @@ function getAttackExternalId(refs: StixExternalRef[] | undefined): string | null
     if (ref.source_name === "mitre-attack" && ref.external_id) return ref.external_id;
   }
   return null;
+}
+
+function getAttackCitations(refs: StixExternalRef[] | undefined): Array<{ name: string; url: string }> {
+  const out: Array<{ name: string; url: string }> = [];
+  for (const ref of refs ?? []) {
+    const name = ref.source_name?.trim();
+    const url = ref.url?.trim();
+    if (!name || !url) continue;
+    if (name === "mitre-attack") continue;
+    out.push({ name, url });
+  }
+
+  // Deduplicate by (name, url) while preserving order.
+  const seen = new Set<string>();
+  const deduped: Array<{ name: string; url: string }> = [];
+  for (const c of out) {
+    const key = `${c.name}||${c.url}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(c);
+  }
+
+  return deduped;
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -313,7 +340,7 @@ export async function runTtpAgent() {
         name: iset.name,
         aliases: iset.aliases ?? null,
         description: iset.description ?? null,
-        attributes: { source: "mitre-attack" },
+        attributes: { source: "mitre-attack", citations: getAttackCitations(iset.external_references) },
       });
       idMap.set(iset.id, { kind: "actor", entityId: gid });
 
@@ -335,7 +362,7 @@ export async function runTtpAgent() {
         name: tech.name,
         aliases: null,
         description: tech.description ?? null,
-        attributes: { source: "mitre-attack" },
+        attributes: { source: "mitre-attack", citations: getAttackCitations(tech.external_references) },
       });
       idMap.set(tech.id, { kind: "technique", entityId: tid });
     } else if (obj.type === "course-of-action") {
@@ -349,7 +376,7 @@ export async function runTtpAgent() {
         name: mit.name,
         aliases: null,
         description: mit.description ?? null,
-        attributes: { source: "mitre-attack" },
+        attributes: { source: "mitre-attack", citations: getAttackCitations(mit.external_references) },
       });
       idMap.set(mit.id, { kind: "mitigation", entityId: mid });
     } else if (obj.type === "campaign") {
@@ -363,7 +390,7 @@ export async function runTtpAgent() {
         name: camp.name,
         aliases: null,
         description: camp.description ?? null,
-        attributes: { source: "mitre-attack" },
+        attributes: { source: "mitre-attack", citations: getAttackCitations(camp.external_references) },
       });
       idMap.set(camp.id, { kind: "campaign", entityId: cid });
     } else if (obj.type === "relationship") {

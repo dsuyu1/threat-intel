@@ -152,7 +152,7 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
 
         const bodyText = await res.text().catch(() => "");
         const retryAfterMs = parseRetryAfterMs({ res, bodyText });
-        if (res.status === 429 && shouldRetry429({ retryAfterMs, bodyText }) && attempt < 4) {
+        if (res.status === 429 && retryAfterMs && shouldRetry429({ retryAfterMs, bodyText }) && attempt < 4) {
           await sleep(retryAfterMs);
           continue;
         }
@@ -197,7 +197,7 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
 
         const bodyText = await res.text().catch(() => "");
         const retryAfterMs = parseRetryAfterMs({ res, bodyText });
-        if (res.status === 429 && shouldRetry429({ retryAfterMs, bodyText }) && attempt < 4) {
+        if (res.status === 429 && retryAfterMs && shouldRetry429({ retryAfterMs, bodyText }) && attempt < 4) {
           await sleep(retryAfterMs);
           continue;
         }
@@ -267,7 +267,7 @@ export async function generateText(params: {
 
     const bodyText = await res.text().catch(() => "");
     const retryAfterMs = parseRetryAfterMs({ res, bodyText });
-    if (res.status === 429 && shouldRetry429({ retryAfterMs, bodyText }) && attempt < 4) {
+    if (res.status === 429 && retryAfterMs && shouldRetry429({ retryAfterMs, bodyText }) && attempt < 4) {
       await sleep(retryAfterMs);
       continue;
     }

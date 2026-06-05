@@ -4,19 +4,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   actorNeighbors,
-  documents,
   getDb,
   kgEntities,
   kgEvidence,
   kgRelations,
 } from "@ti/db";
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { ControlPentagon } from "../../../components/ControlPentagon";
+import { Pentagraph } from "../../../components/Pentagraph";
 import { EvidenceDetails } from "../../../components/EvidenceDetails";
 import { SectorWheel } from "../../../components/SectorWheel";
-import { ActorMiniGlobeLazy } from "../../../components/ActorMiniGlobeLazy";
 import { Markdown } from "../../../components/ui/Markdown";
-import { iso2ToLngLat } from "../../../lib/country-coords";
+import { InfoTip } from "../../../components/ui/InfoTip";
 import { toIsoStringSafe } from "../../../lib/dates";
 
 type EvidenceItem = {
@@ -25,6 +23,79 @@ type EvidenceItem = {
   publishedAt: string | null;
   confidence: number;
 };
+
+type MitreCitation = { name: string; url?: string | null };
+
+const SUPER_DIGITS: Record<string, string> = {
+  "0": "⁰",
+  "1": "¹",
+  "2": "²",
+  "3": "³",
+  "4": "⁴",
+  "5": "⁵",
+  "6": "⁶",
+  "7": "⁷",
+  "8": "⁸",
+  "9": "⁹",
+};
+
+function toSuperscript(n: number) {
+  const s = String(Math.max(0, Math.floor(n)));
+  return s
+    .split("")
+    .map((ch) => SUPER_DIGITS[ch] ?? ch)
+    .join("");
+}
+
+function normCitationLabel(label: string) {
+  return label.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function getMitreCitationsFromAttributes(attrs: unknown): MitreCitation[] {
+  if (!attrs || typeof attrs !== "object") return [];
+  const obj = attrs as any;
+  const raw = obj["citations"];
+  if (!Array.isArray(raw)) return [];
+  const out: MitreCitation[] = [];
+  for (const c of raw) {
+    if (!c || typeof c !== "object") continue;
+    const name = typeof (c as any).name === "string" ? (c as any).name.trim() : "";
+    const url = typeof (c as any).url === "string" ? (c as any).url.trim() : null;
+    if (!name) continue;
+    out.push({ name, url });
+  }
+  return out;
+}
+
+function formatMitreDescription(params: {
+  description: string;
+  citations: MitreCitation[];
+}) {
+  const citationUrlByNorm = new Map<string, string>();
+  for (const c of params.citations) {
+    if (!c.url) continue;
+    citationUrlByNorm.set(normCitationLabel(c.name), c.url);
+  }
+
+  const sources: Array<{ index: number; label: string; url?: string }> = [];
+  const indexByNorm = new Map<string, number>();
+
+  const text = params.description.replace(/\s*\(Citation:\s*([^)]+?)\)/g, (_m, rawLabel) => {
+    const label = String(rawLabel ?? "").trim();
+    if (!label) return "";
+
+    const norm = normCitationLabel(label);
+    const existing = indexByNorm.get(norm);
+    if (existing) return toSuperscript(existing);
+
+    const index = sources.length + 1;
+    indexByNorm.set(norm, index);
+    sources.push({ index, label, url: citationUrlByNorm.get(norm) });
+    return toSuperscript(index);
+  });
+
+  return { text: text.trim(), sources };
+}
 
 async function fetchEvidenceByRelationIds(
   relationIds: string[],
@@ -218,6 +289,21 @@ export default async function ActorPage({
   const actor = await getActor(actorId);
   if (!actor) notFound();
 
+  const aliases = (actor.aliases ?? [])
+    .map((a) => String(a ?? "").trim())
+    .filter(Boolean)
+    .filter((a) => a.toLowerCase() !== String(actor.name ?? "").trim().toLowerCase());
+  const aliasesUnique: string[] = [];
+  const seenAlias = new Set<string>();
+  for (const a of aliases) {
+    const k = a.toLowerCase();
+    if (seenAlias.has(k)) continue;
+    seenAlias.add(k);
+    aliasesUnique.push(a);
+  }
+  const aliasesShown = aliasesUnique.slice(0, 6);
+  const aliasesRemaining = Math.max(0, aliasesUnique.length - aliasesShown.length);
+
   const [origins, sectors, techniques, cves, campaigns, neighbors] = await Promise.all([
     getTopRelations({ actorId, type: "actor_origin_country", toKind: "country", limit: 3 }),
     getTopRelations({ actorId, type: "actor_targets_sector", toKind: "sector", limit: 10 }),
@@ -227,41 +313,62 @@ export default async function ActorPage({
     getNeighbors(actorId),
   ]);
 
-  const topOrigin = origins[0]?.id ?? null;
-  const lngLat = topOrigin ? iso2ToLngLat(topOrigin) : null;
-
   const mitigations = await getMitigationsFromTechniques(techniques.slice(0, 8).map((t) => t.id));
+
+  const sumSupport = (items: Array<{ support: number }>) =>
+    items.reduce((acc, it) => acc + (Number.isFinite(it.support) ? Math.max(0, it.support) : 0), 0);
 
   const facets = [
     {
       label: "Origin",
       value: origins[0]?.id ?? "\u2014",
       sub: null,
+      weight: origins[0]?.support ?? 0,
     },
     {
       label: "Sectors",
       value: sectors.length ? String(sectors.length) : "\u2014",
       sub: "Weighted (decayed support)",
+      weight: sumSupport(sectors),
     },
     {
       label: "TTPs",
       value: techniques.length ? String(techniques.length) : "\u2014",
       sub: "Explicit ATT&CK IDs only",
+      weight: sumSupport(techniques),
     },
     {
       label: "CVEs",
       value: cves.length ? String(cves.length) : "\u2014",
       sub: "Explicit CVEs only",
+      weight: sumSupport(cves),
     },
     {
       label: "Mitigations",
       value: mitigations.length ? String(mitigations.length) : "\u2014",
       sub: "Derived from ATT&CK",
+      weight: mitigations.reduce((acc, m) => acc + (Number.isFinite(m.count) ? m.count : 0), 0),
     },
   ];
 
+  const GRAPH_BRANCH_MAX = 10;
+  const branches = [
+    { items: origins.slice(0, GRAPH_BRANCH_MAX).map((o) => ({ label: o.id, weight: o.support })) },
+    { items: sectors.slice(0, GRAPH_BRANCH_MAX).map((s) => ({ label: s.name, weight: s.support })) },
+    { items: techniques.slice(0, GRAPH_BRANCH_MAX).map((t) => ({ label: t.id, weight: t.support })) },
+    { items: cves.slice(0, GRAPH_BRANCH_MAX).map((c) => ({ label: c.id, weight: c.support })) },
+    { items: mitigations.slice(0, GRAPH_BRANCH_MAX).map((m) => ({ label: m.id, weight: m.count })) },
+  ];
+
+  const mitreDesc = actor.description
+    ? formatMitreDescription({
+        description: actor.description,
+        citations: getMitreCitationsFromAttributes(actor.attributes),
+      })
+    : null;
+
   return (
-    <div className="max-w-6xl mx-auto px-6 md:px-10 py-10">
+    <div className="max-w-[1440px] mx-auto px-6 md:px-10 py-10">
       <header className="space-y-3">
         <Link
           href="/actors"
@@ -273,13 +380,37 @@ export default async function ActorPage({
         <h1 className="text-3xl md:text-4xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
           {actor.name}
         </h1>
+        {aliasesShown.length ? (
+          <p className="text-sm text-zinc-500">
+            Also known as{" "}
+            <span className="text-zinc-700 dark:text-zinc-300">
+              {aliasesShown.join(", ")}
+              {aliasesRemaining ? `, and ${aliasesRemaining} more` : ""}
+            </span>
+          </p>
+        ) : null}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-500">
           <span className="tabular-nums tracking-wide">{actor.entityId}</span>
-          {actor.aliases?.length ? <span>{actor.aliases.length} aliases</span> : null}
+          {origins[0] ? (
+            <span className="flex items-center gap-1.5">
+              <span className="text-zinc-600 dark:text-zinc-500">Origin</span>
+              <Link
+                href={`/countries/${origins[0].id}`}
+                className="text-zinc-900 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              >
+                {origins[0].name}
+              </Link>
+              <span className="tabular-nums tracking-wide text-zinc-500">({origins[0].id})</span>
+            </span>
+          ) : null}
         </div>
       </header>
 
-      <div className="mt-8 grid gap-10 lg:grid-cols-[1.2fr,0.8fr]">
+      <div className="mt-10">
+        <Pentagraph facets={facets} branches={branches} />
+      </div>
+
+      <div className="mt-10 grid gap-10 lg:grid-cols-[1.2fr,0.8fr]">
         <div className="space-y-10">
           <section>
             <div className="flex items-center justify-between gap-3">
@@ -293,8 +424,35 @@ export default async function ActorPage({
                 attack.mitre.org <span aria-hidden="true">&rarr;</span>
               </a>
             </div>
-            {actor.description ? (
-              <Markdown className="mt-3">{actor.description}</Markdown>
+            {mitreDesc?.text ? (
+              <>
+                <Markdown className="mt-3">{mitreDesc.text}</Markdown>
+                {mitreDesc.sources.length ? (
+                  <div className="mt-2 text-xs text-zinc-500 leading-snug">
+                    <span className="text-zinc-600 dark:text-zinc-500">Sources:</span>{" "}
+                    {mitreDesc.sources.map((s, i) => (
+                      <span key={s.index} className="inline-flex items-baseline gap-1">
+                        <span className="tabular-nums">{toSuperscript(s.index)}</span>
+                        {s.url ? (
+                          <a
+                            href={s.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                          >
+                            {s.label}
+                          </a>
+                        ) : (
+                          <span className="text-zinc-700 dark:text-zinc-300">{s.label}</span>
+                        )}
+                        {i < mitreDesc.sources.length - 1 ? (
+                          <span className="px-1 text-zinc-400 dark:text-zinc-600">·</span>
+                        ) : null}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </>
             ) : (
               <p className="mt-3 text-sm text-zinc-500">No MITRE description available yet.</p>
             )}
@@ -302,8 +460,13 @@ export default async function ActorPage({
 
           <section>
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Campaigns</h2>
-              <span className="text-xs text-zinc-500">MITRE-derived</span>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Campaigns</h2>
+                <InfoTip
+                  title="MITRE"
+                  body="Campaign links are derived from MITRE ATT&CK STIX (campaign attribution relationships)."
+                />
+              </div>
             </div>
             {campaigns.length ? (
               <ul className="mt-3 divide-y divide-zinc-200 dark:divide-zinc-900/80 rounded-xl border border-zinc-200 dark:border-zinc-900/80 bg-white/70 dark:bg-black/35">
@@ -336,8 +499,13 @@ export default async function ActorPage({
 
           <section>
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Mitigations</h2>
-              <span className="text-xs text-zinc-500">from ATT&amp;CK</span>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Mitigations</h2>
+                <InfoTip
+                  title="ATT&CK"
+                  body="Mitigations are derived from MITRE ATT&CK technique ↔ mitigation mappings."
+                />
+              </div>
             </div>
             <p className="mt-2 text-sm text-zinc-500">
               Derived by mapping the actor&apos;s top techniques to MITRE ATT&amp;CK mitigations.
@@ -363,19 +531,6 @@ export default async function ActorPage({
         </div>
 
         <div className="space-y-10">
-          <ControlPentagon facets={facets} />
-
-          {lngLat ? (
-            <section className="space-y-3">
-              <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Origin</h2>
-              <ActorMiniGlobeLazy
-                lng={lngLat[0]}
-                lat={lngLat[1]}
-                label={topOrigin ?? "Origin"}
-              />
-            </section>
-          ) : null}
-
           <section className="space-y-3">
             <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Target Sectors</h2>
             <SectorWheel

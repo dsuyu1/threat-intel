@@ -17,6 +17,28 @@ type ActorRow = {
   lastSeen: string | null;
 };
 
+type SortKey =
+  | "origin"
+  | "ttps"
+  | "mitigations"
+  | "cves"
+  | "sectors"
+  | "recent"
+  | "name";
+
+type SortDir = "asc" | "desc";
+
+type SearchParams = {
+  q?: string;
+  origin?: string;
+  sort?: SortKey;
+  dir?: SortDir;
+  minTtps?: string;
+  minMitigations?: string;
+  minCves?: string;
+  minSectors?: string;
+};
+
 async function getActors(q: string | null): Promise<ActorRow[]> {
   const db = getDb();
   const where = q
@@ -116,14 +138,80 @@ async function getActors(q: string | null): Promise<ActorRow[]> {
   }));
 }
 
+function parseMin(value: string | undefined) {
+  if (!value) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const floored = Math.floor(n);
+  if (floored <= 0) return null;
+  return floored;
+}
+
+function getCountryName(iso2: string) {
+  try {
+    const dn = new Intl.DisplayNames(["en"], { type: "region" });
+    return dn.of(iso2) ?? iso2;
+  } catch {
+    return iso2;
+  }
+}
+
 export default async function ActorsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<SearchParams>;
 }) {
-  const { q } = await searchParams;
-  const query = q?.trim() ? q.trim() : null;
-  const rows = await getActors(query);
+  const sp = await searchParams;
+  const query = sp.q?.trim() ? sp.q.trim() : null;
+
+  const originFilter = sp.origin?.trim() ? sp.origin.trim().toUpperCase() : null;
+  const minTtps = parseMin(sp.minTtps);
+  const minMitigations = parseMin(sp.minMitigations);
+  const minCves = parseMin(sp.minCves);
+  const minSectors = parseMin(sp.minSectors);
+
+  const sort: SortKey = sp.sort ?? "recent";
+  const dir: SortDir = sp.dir === "asc" ? "asc" : "desc";
+
+  const allRows = await getActors(query);
+
+  const availableOrigins = Array.from(
+    new Set(allRows.map((r) => r.originIso2).filter(Boolean) as string[])
+  ).sort((a, b) => a.localeCompare(b));
+
+  const filtered = allRows
+    .filter((r) => {
+      if (!originFilter || originFilter === "ANY") return true;
+      return (r.originIso2 ?? "").toUpperCase() === originFilter;
+    })
+    .filter((r) => (minTtps ? r.ttpCount >= minTtps : true))
+    .filter((r) => (minMitigations ? r.mitigationCount >= minMitigations : true))
+    .filter((r) => (minCves ? r.cveCount >= minCves : true))
+    .filter((r) => (minSectors ? r.sectorCount >= minSectors : true));
+
+  filtered.sort((a, b) => {
+    const mul = dir === "asc" ? 1 : -1;
+    switch (sort) {
+      case "origin":
+        return mul * (a.originIso2 ?? "").localeCompare(b.originIso2 ?? "");
+      case "ttps":
+        return mul * (a.ttpCount - b.ttpCount);
+      case "mitigations":
+        return mul * (a.mitigationCount - b.mitigationCount);
+      case "cves":
+        return mul * (a.cveCount - b.cveCount);
+      case "sectors":
+        return mul * (a.sectorCount - b.sectorCount);
+      case "name":
+        return mul * a.name.localeCompare(b.name);
+      case "recent":
+      default: {
+        const at = a.lastSeen ? new Date(a.lastSeen).getTime() : 0;
+        const bt = b.lastSeen ? new Date(b.lastSeen).getTime() : 0;
+        return mul * (at - bt);
+      }
+    }
+  });
 
   return (
     <div className="mx-auto max-w-[1440px] px-8 py-10 space-y-8">
@@ -132,30 +220,119 @@ export default async function ActorsPage({
           Threat actors
         </h1>
         <p className="text-sm text-zinc-600 dark:text-zinc-500">
-          Browse actor profiles. Search pauses motion and filters the stream.
+          Filter and sort by origin, TTPs, mitigations, CVEs, and sectors.
         </p>
       </header>
 
-      <form className="flex items-center gap-2" action="/actors" method="get">
-        <input
-          name="q"
-          defaultValue={q ?? ""}
-          placeholder="Search actors…"
-          className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
-        />
-        <button className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white hover:bg-zinc-800 transition-colors">
-          Search
-        </button>
+      <form className="space-y-3" action="/actors" method="get">
+        <div className="flex items-center gap-2">
+          <input
+            name="q"
+            defaultValue={sp.q ?? ""}
+            placeholder="Search actors…"
+            className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+          />
+          <button className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white hover:bg-zinc-800 transition-colors">
+            Apply
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-2">
+          <label className="space-y-1">
+            <div className="text-[11px] text-zinc-500">Origin</div>
+            <select
+              name="origin"
+              defaultValue={originFilter ?? "ANY"}
+              className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2.5 py-2 text-xs text-zinc-900 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+            >
+              <option value="ANY">Any</option>
+              {availableOrigins.map((iso2) => (
+                <option key={iso2} value={iso2}>
+                  {getCountryName(iso2)} ({iso2})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-1">
+            <div className="text-[11px] text-zinc-500">Min TTPs</div>
+            <input
+              name="minTtps"
+              inputMode="numeric"
+              defaultValue={sp.minTtps ?? ""}
+              className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2.5 py-2 text-xs text-zinc-900 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+              placeholder="0"
+            />
+          </label>
+
+          <label className="space-y-1">
+            <div className="text-[11px] text-zinc-500">Min mitigations</div>
+            <input
+              name="minMitigations"
+              inputMode="numeric"
+              defaultValue={sp.minMitigations ?? ""}
+              className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2.5 py-2 text-xs text-zinc-900 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+              placeholder="0"
+            />
+          </label>
+
+          <label className="space-y-1">
+            <div className="text-[11px] text-zinc-500">Min CVEs</div>
+            <input
+              name="minCves"
+              inputMode="numeric"
+              defaultValue={sp.minCves ?? ""}
+              className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2.5 py-2 text-xs text-zinc-900 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+              placeholder="0"
+            />
+          </label>
+
+          <label className="space-y-1">
+            <div className="text-[11px] text-zinc-500">Min sectors</div>
+            <input
+              name="minSectors"
+              inputMode="numeric"
+              defaultValue={sp.minSectors ?? ""}
+              className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2.5 py-2 text-xs text-zinc-900 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+              placeholder="0"
+            />
+          </label>
+
+          <label className="space-y-1">
+            <div className="text-[11px] text-zinc-500">Sort</div>
+            <div className="flex gap-2">
+              <select
+                name="sort"
+                defaultValue={sort}
+                className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2.5 py-2 text-xs text-zinc-900 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+              >
+                <option value="recent">Recent activity</option>
+                <option value="origin">Origin</option>
+                <option value="ttps">TTPs</option>
+                <option value="mitigations">Mitigations</option>
+                <option value="cves">CVEs</option>
+                <option value="sectors">Sectors</option>
+                <option value="name">Name</option>
+              </select>
+              <select
+                name="dir"
+                defaultValue={dir}
+                className="w-[92px] bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2.5 py-2 text-xs text-zinc-900 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+              >
+                <option value="desc">Desc</option>
+                <option value="asc">Asc</option>
+              </select>
+            </div>
+          </label>
+        </div>
+
+        <div className="text-xs text-zinc-500">
+          Showing <span className="tabular-nums">{filtered.length}</span> of{" "}
+          <span className="tabular-nums">{allRows.length}</span> actors.
+        </div>
       </form>
 
-      <ActorMarquee rows={rows} />
-
-      {Boolean(query) && (
-        <div className="text-xs text-zinc-500">
-          Showing {rows.length} result{rows.length === 1 ? "" : "s"} for{" "}
-          <span className="text-zinc-700 dark:text-zinc-300">{query}</span>.
-        </div>
-      )}
+      <ActorMarquee rows={filtered} />
     </div>
   );
 }

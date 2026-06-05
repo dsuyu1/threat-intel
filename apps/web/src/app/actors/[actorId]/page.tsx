@@ -544,8 +544,7 @@ export default async function ActorPage({
 
           <section>
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Similarity</h2>
-              <span className="text-xs text-zinc-500">offline neighbors</span>
+              <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Similarities</h2>
             </div>
             {neighbors.length ? (
               <ul className="mt-3 divide-y divide-zinc-200 dark:divide-zinc-900/80 rounded-xl border border-zinc-200 dark:border-zinc-900/80 bg-white/70 dark:bg-black/35">

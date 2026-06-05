@@ -27,7 +27,7 @@ function ActorCard({ row }: { row: ActorRow }) {
   return (
     <Link
       href={`/actors/${row.actorId}`}
-      className="group block min-w-[340px] max-w-[420px] rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-950/40 backdrop-blur px-5 py-4 transition-colors hover:bg-white/90 dark:hover:bg-zinc-950/60"
+      className="group block w-full rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-950/40 backdrop-blur px-5 py-4 transition-colors hover:bg-white/90 dark:hover:bg-zinc-950/60"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -76,18 +76,6 @@ function ActorCard({ row }: { row: ActorRow }) {
   );
 }
 
-function ActorStrip({ items }: { items: ActorRow[] }) {
-  return (
-    <div className="overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <div className="flex w-max gap-5 pr-8">
-        {items.map((row) => (
-          <ActorCard key={row.actorId} row={row} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function ActorMarquee({ rows }: { rows: ActorRow[] }) {
   if (rows.length === 0) {
     return (
@@ -97,15 +85,11 @@ export function ActorMarquee({ rows }: { rows: ActorRow[] }) {
     );
   }
 
-  const row1 = rows.filter((_, i) => i % 3 === 0);
-  const row2 = rows.filter((_, i) => i % 3 === 1);
-  const row3 = rows.filter((_, i) => i % 3 === 2);
-
   return (
-    <section className="space-y-5">
-      <ActorStrip items={row1.length ? row1 : rows} />
-      <ActorStrip items={row2.length ? row2 : rows} />
-      <ActorStrip items={row3.length ? row3 : rows} />
-    </section>
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+      {rows.map((row) => (
+        <ActorCard key={row.actorId} row={row} />
+      ))}
+    </div>
   );
 }

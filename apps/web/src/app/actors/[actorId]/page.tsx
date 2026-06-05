@@ -28,16 +28,16 @@ type EvidenceItem = {
 type MitreCitation = { name: string; url?: string | null };
 
 const SUPER_DIGITS: Record<string, string> = {
-  "0": "â°",
-  "1": "Â¹",
-  "2": "Â²",
-  "3": "Â³",
-  "4": "â´",
-  "5": "âµ",
-  "6": "â¶",
-  "7": "â·",
-  "8": "â¸",
-  "9": "â¹",
+  "0": "⁰",
+  "1": "¹",
+  "2": "²",
+  "3": "³",
+  "4": "⁴",
+  "5": "⁵",
+  "6": "⁶",
+  "7": "⁷",
+  "8": "⁸",
+  "9": "⁹",
 };
 
 function toSuperscript(n: number) {
@@ -529,9 +529,7 @@ export default async function ActorPage({
               <p className="mt-3 text-sm text-zinc-500">No mitigations mapped yet.</p>
             )}
           </section>
-        </div>
 
-        <div className="space-y-10">
           <section className="space-y-3">
             <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Target Sectors</h2>
             <SectorWheel
@@ -547,7 +545,9 @@ export default async function ActorPage({
               </p>
             ) : null}
           </section>
+        </div>
 
+        <div className="space-y-10">
           <section>
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Similarities</h2>
@@ -590,7 +590,6 @@ export default async function ActorPage({
       <section className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="space-y-4">
           <FacetCard title="Origin Countries" items={origins} />
-          <FacetCard title="Target Sectors" items={sectors} />
         </div>
         <div className="space-y-4">
           <FacetCard title="Top TTPs (ATT&CK)" items={techniques} />

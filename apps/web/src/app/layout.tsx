@@ -77,7 +77,7 @@ function Nav() {
             href="/"
             className="block rounded-lg px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/5 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
           >
-            overview
+            global view
           </a>
           <a
             href="/actors"

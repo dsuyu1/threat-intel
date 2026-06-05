@@ -1,5 +1,6 @@
-﻿export const runtime = "edge";
+export const runtime = "edge";
 
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Script from "next/script";
@@ -42,7 +43,9 @@ export default function RootLayout({
           </div>
         </nav>
         <main className="flex-1 min-h-0">{children}</main>
-        <RouteLoadingOverlay />
+        <Suspense fallback={null}>
+          <RouteLoadingOverlay />
+        </Suspense>
         <DotCursor />
       </body>
     </html>

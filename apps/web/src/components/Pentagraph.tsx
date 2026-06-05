@@ -217,7 +217,7 @@ export function Pentagraph({ facets, branches }: { facets: Facet[]; branches: Br
     const width = Math.max(320, size.width || 1200);
     const height = Math.max(320, size.height || 640);
 
-    const padding = { left: 88, right: 28, top: 34, bottom: 54 };
+    const padding = { left: 88, right: 40, top: 34, bottom: 54 };
     const w = Math.max(1, width - padding.left - padding.right);
     const h = Math.max(1, height - padding.top - padding.bottom);
 
@@ -273,7 +273,7 @@ export function Pentagraph({ facets, branches }: { facets: Facet[]; branches: Br
         const extra = stemMin + norm * stemMax;
         const centerOffset = n > 1 ? (idx - (n - 1) / 2) * step : 0;
         const jitter = (hash01(`${g.index}:${it.label}`) - 0.5) * Math.min(10, step * 0.35 + 4);
-        const x = groupX + centerOffset + jitter;
+        const x = clamp(groupX + centerOffset + jitter, 6, w - 6);
         nodes.push({
           id: `item:${g.index}:${it.label}`,
           label: it.label,
@@ -444,7 +444,7 @@ export function Pentagraph({ facets, branches }: { facets: Facet[]; branches: Br
   }, []);
 
   return (
-    <section aria-label="Pentagraph" className="w-full">
+    <section aria-label="Overview" className="w-full">
       <div
         ref={fullscreenRef}
         className={[
@@ -455,7 +455,7 @@ export function Pentagraph({ facets, branches }: { facets: Facet[]; branches: Br
         <div className="flex items-baseline justify-between gap-4">
           <div className="min-w-0">
             <h2 className="text-2xl md:text-3xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
-              Pentagraph
+              Overview
             </h2>
             <p className="mt-1 text-sm text-zinc-500">
               Hover nodes for details.
@@ -485,11 +485,16 @@ export function Pentagraph({ facets, branches }: { facets: Facet[]; branches: Br
             viewBox={`0 0 ${plot.width} ${plot.height}`}
             className="absolute inset-0 h-full w-full"
             role="img"
-            aria-label="Pentagraph graph"
+            aria-label="Overview graph"
           >
             <defs>
               <clipPath id={clipPathId}>
-                <rect x={plot.padding.left} y={plot.padding.top} width={plot.plotW} height={plot.plotH} />
+                <rect
+                  x={plot.padding.left - 10}
+                  y={plot.padding.top - 10}
+                  width={plot.plotW + 20}
+                  height={plot.plotH + 20}
+                />
               </clipPath>
 
               {plot.layers.map((layer, idx) => {

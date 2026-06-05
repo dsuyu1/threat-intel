@@ -38,6 +38,10 @@ import {
   getEnabledSources,
 } from "../lib/sources.js";
 import { normalizeAlias } from "../lib/kg.js";
+import { parseGroupsFromCampaignPage, parseMitreCampaignIndex } from "../lib/mitre-pages.js";
+
+const MITRE_CAMPAIGNS_INDEX_URL = "https://attack.mitre.org/campaigns/";
+const MITRE_UA = "threat-intel-platform/1.0";
 
 type StixExternalRef = {
   source_name?: string;
@@ -144,6 +148,112 @@ function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
+}
+
+async function fetchText(url: string): Promise<string> {
+  const res = await fetch(url, {
+    headers: { "User-Agent": MITRE_UA, Accept: "text/html" },
+  });
+  if (!res.ok) throw new Error(`MITRE fetch failed: ${res.status} ${res.statusText} (${url})`);
+  return res.text();
+}
+
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = [];
+  let idx = 0;
+
+  const workers = Array.from({ length: Math.max(1, limit) }).map(async () => {
+    while (idx < items.length) {
+      const cur = items[idx++]!;
+      results.push(await fn(cur));
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+}
+
+async function syncMitreCampaignsFromWeb(now: Date): Promise<void> {
+  const enabled =
+    (process.env["TTP_SYNC_CAMPAIGNS_WEB"] ?? "").toLowerCase() !== "0" &&
+    (process.env["TTP_SYNC_CAMPAIGNS_WEB"] ?? "").toLowerCase() !== "false";
+  if (!enabled) return;
+
+  console.log(`[TtpAgent] Syncing campaigns from MITRE web (${MITRE_CAMPAIGNS_INDEX_URL})...`);
+
+  const db = getDb();
+  let indexHtml: string;
+  try {
+    indexHtml = await fetchText(MITRE_CAMPAIGNS_INDEX_URL);
+  } catch (err) {
+    console.warn("[TtpAgent] Campaign index fetch failed:", err);
+    return;
+  }
+
+  const campaigns = parseMitreCampaignIndex(indexHtml);
+  if (campaigns.length === 0) {
+    console.warn("[TtpAgent] No campaigns parsed from MITRE index.");
+    return;
+  }
+
+  // Upsert campaign entities without overwriting STIX descriptions.
+  for (const batch of chunk(campaigns, 200)) {
+    await db
+      .insert(kgEntities)
+      .values(
+        batch.map((c) => ({
+          kind: "campaign",
+          entityId: c.id,
+          name: c.name,
+          aliases: null,
+          description: null,
+          attributes: ({ mitreWeb: { url: c.url, fetchedAt: now.toISOString() } } as never),
+          updatedAt: now,
+        }))
+      )
+      .onConflictDoUpdate({
+        target: [kgEntities.kind, kgEntities.entityId],
+        set: {
+          name: sql`excluded.name`,
+          description: sql`COALESCE(${kgEntities.description}, excluded.description)`,
+          attributes: sql`COALESCE(${kgEntities.attributes}, '{}'::jsonb) || excluded.attributes`,
+          updatedAt: now,
+        },
+      });
+  }
+
+  // Fetch campaign pages and map to groups via /groups/G#### links.
+  const rels: RelationRow[] = [];
+  const concurrency = Math.max(1, Math.min(8, Number(process.env["TTP_CAMPAIGNS_CONCURRENCY"] ?? 6)));
+
+  await mapLimit(campaigns, concurrency, async (c) => {
+    try {
+      const html = await fetchText(c.url);
+      const groupIds = parseGroupsFromCampaignPage(html);
+      for (const gid of groupIds) {
+        rels.push({
+          type: "actor_attributed_campaign",
+          fromKind: "actor",
+          fromId: gid,
+          toKind: "campaign",
+          toId: c.id,
+          support: 1,
+          confidence: 1,
+          firstSeen: now,
+          lastSeen: now,
+          attributes: { source: "mitre-web", url: c.url },
+        });
+      }
+    } catch (err) {
+      console.warn("[TtpAgent] Campaign page fetch/parse failed:", c.id, err);
+    }
+  });
+
+  if (rels.length) {
+    await upsertRelations(rels);
+  }
+
+  console.log(`[TtpAgent] MITRE web campaigns synced. Campaigns: ${campaigns.length} | Relations: ${rels.length}`);
 }
 
 async function ensureMitreDocument(stixUrl: string): Promise<string> {
@@ -289,6 +399,7 @@ export async function runTtpAgent() {
       .update(sources)
       .set({ lastFetchedAt: new Date(), updatedAt: new Date() })
       .where(eq(sources.id, src.id));
+    await syncMitreCampaignsFromWeb(new Date());
     return;
   }
   if (!res.ok) throw new Error(`STIX fetch failed: ${res.status} ${res.statusText}`);
@@ -505,6 +616,7 @@ export async function runTtpAgent() {
   await upsertEntities(entityRows, now);
   await insertAliases(aliasRows);
   await upsertRelations(relationRows);
+  await syncMitreCampaignsFromWeb(now);
 
   console.log("[TtpAgent] Done.");
 }

@@ -1,4 +1,4 @@
-export const runtime = "edge";
+﻿export const runtime = "edge";
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -28,16 +28,16 @@ type EvidenceItem = {
 type MitreCitation = { name: string; url?: string | null };
 
 const SUPER_DIGITS: Record<string, string> = {
-  "0": "⁰",
-  "1": "¹",
-  "2": "²",
-  "3": "³",
-  "4": "⁴",
-  "5": "⁵",
-  "6": "⁶",
-  "7": "⁷",
-  "8": "⁸",
-  "9": "⁹",
+  "0": "â°",
+  "1": "Â¹",
+  "2": "Â²",
+  "3": "Â³",
+  "4": "â´",
+  "5": "âµ",
+  "6": "â¶",
+  "7": "â·",
+  "8": "â¸",
+  "9": "â¹",
 };
 
 function toSuperscript(n: number) {
@@ -434,7 +434,7 @@ export default async function ActorPage({
                 rel="noreferrer"
                 className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
               >
-                attack.mitre.org <span aria-hidden="true">&rarr;</span>
+                MITRE <span aria-hidden="true">&rarr;</span>
               </a>
             </div>
             {mitreDesc?.text ? (
@@ -477,7 +477,7 @@ export default async function ActorPage({
                 <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Campaigns</h2>
                 <InfoTip
                   title="MITRE"
-                  body="Campaign links are derived from MITRE ATT&CK STIX (campaign attribution relationships)."
+                  body="Campaign links are pulled from MITRE ATT&CK campaign pages (and mapped to groups)."
                 />
               </div>
             </div>
@@ -524,19 +524,7 @@ export default async function ActorPage({
               Derived by mapping the actor&apos;s top techniques to MITRE ATT&amp;CK mitigations.
             </p>
             {mitigations.length ? (
-              <div className="mt-3 divide-y divide-zinc-200 dark:divide-zinc-900/80 rounded-xl border border-zinc-200 dark:border-zinc-900/80 bg-white/70 dark:bg-black/35">
-                {mitigations.map((m) => (
-                  <div key={m.id} className="p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-base font-medium text-zinc-900 dark:text-zinc-100">{m.name}</div>
-                      <span className="text-xs text-zinc-500 tabular-nums tracking-wide">
-                        {m.id} <span aria-hidden="true">&middot;</span> {m.count}
-                      </span>
-                    </div>
-                    <EvidenceDetails evidence={m.evidence} />
-                  </div>
-                ))}
-              </div>
+              <MitigationBars items={mitigations} />
             ) : (
               <p className="mt-3 text-sm text-zinc-500">No mitigations mapped yet.</p>
             )}
@@ -553,6 +541,11 @@ export default async function ActorPage({
                 weight: s.support,
               }))}
             />
+            {!sectors.length ? (
+              <p className="text-sm text-zinc-500">
+                No sector attributions yet. This fills in as RSS reports are ingested and parsed.
+              </p>
+            ) : null}
           </section>
 
           <section>
@@ -595,10 +588,14 @@ export default async function ActorPage({
       </div>
 
       <section className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <FacetCard title="Origin Countries" items={origins} />
-        <FacetCard title="Target Sectors (Evidence)" items={sectors} />
-        <FacetCard title="Top TTPs (ATT&CK)" items={techniques} />
-        <FacetCard title="Top CVEs" items={cves} />
+        <div className="space-y-4">
+          <FacetCard title="Origin Countries" items={origins} />
+          <FacetCard title="Target Sectors" items={sectors} />
+        </div>
+        <div className="space-y-4">
+          <FacetCard title="Top TTPs (ATT&CK)" items={techniques} />
+          <FacetRow title="Top CVEs" items={cves} />
+        </div>
       </section>
     </div>
   );
@@ -661,3 +658,108 @@ function FacetCard({
     </section>
   );
 }
+
+function FacetRow({
+  title,
+  items,
+}: {
+  title: string;
+  items: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    support: number;
+    confidence: number;
+    evidence: EvidenceItem[];
+  }>;
+}) {
+  return (
+    <section className="rounded-xl border border-zinc-200 dark:border-zinc-900/80 bg-white/70 dark:bg-black/35">
+      <div className="flex items-baseline justify-between px-4 pt-4">
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
+        <span className="text-xs text-zinc-500">{items.length}</span>
+      </div>
+
+      {items.length ? (
+        <ul className="mt-3 flex gap-3 overflow-x-auto px-4 pb-4">
+          {items.map((it) => (
+            <li
+              key={it.id}
+              className="min-w-[220px] shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-900/80 bg-white/60 dark:bg-black/30 px-3 py-3"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{it.name}</div>
+                  <div className="text-[11px] text-zinc-500 tabular-nums tracking-wide">{it.id}</div>
+                </div>
+                <div className="text-right text-[11px] text-zinc-500 shrink-0">
+                  <div>
+                    <span className="text-zinc-600">Score</span>{" "}
+                    <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-200">{it.support.toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-600">Conf</span>{" "}
+                    <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-200">
+                      {Math.round(it.confidence * 100)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <EvidenceDetails evidence={it.evidence} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="px-4 py-4 text-sm text-zinc-500">No data yet.</p>
+      )}
+    </section>
+  );
+}
+
+function MitigationBars({
+  items,
+}: {
+  items: Array<{ id: string; name: string; count: number; evidence: EvidenceItem[] }>;
+}) {
+  const max = Math.max(1, ...items.map((m) => Math.max(0, m.count ?? 0)));
+  return (
+    <div className="mt-3 rounded-xl border border-zinc-200 dark:border-zinc-900/80 bg-white/70 dark:bg-black/35 px-4 py-3">
+      <div className="space-y-3">
+        {items.map((m) => {
+          const w = `${Math.round((Math.max(0, m.count) / max) * 100)}%`;
+          return (
+            <details key={m.id} className="group">
+              <summary className="list-none [&::-webkit-details-marker]:hidden cursor-pointer">
+                <div className="flex items-baseline justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                      {m.name}
+                    </div>
+                    <div className="text-xs text-zinc-500 tabular-nums tracking-wide">{m.id}</div>
+                  </div>
+                  <div className="shrink-0 text-xs text-zinc-500 tabular-nums">
+                    {m.count}
+                  </div>
+                </div>
+                <div className="mt-2 h-2 w-full rounded-full bg-zinc-200/70 dark:bg-zinc-800/60 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-zinc-700/60 dark:bg-zinc-200/40"
+                    style={{ width: w }}
+                  />
+                </div>
+                <div className="mt-1 text-[11px] text-zinc-500">
+                  <span className="opacity-70 group-open:hidden">Click for evidence</span>
+                </div>
+              </summary>
+              <div className="mt-2">
+                <EvidenceDetails evidence={m.evidence} />
+              </div>
+            </details>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+

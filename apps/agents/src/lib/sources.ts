@@ -1,5 +1,5 @@
 import { getDb, sources } from "@ti/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 
 export const DEFAULT_STIX_SOURCE = {
   name: "MITRE ATT&CK Enterprise STIX",
@@ -32,6 +32,42 @@ export const DEFAULT_RSS_SOURCES = [
     type: "rss" as const,
     url: "https://blog.google/security/rss/",
     reliability: 0.95,
+  },
+  {
+    name: "Palo Alto Unit 42",
+    type: "rss" as const,
+    url: "https://unit42.paloaltonetworks.com/feed/",
+    reliability: 0.95,
+  },
+  {
+    name: "CrowdStrike Blog",
+    type: "rss" as const,
+    url: "https://www.crowdstrike.com/en-us/blog/feed/",
+    reliability: 0.95,
+  },
+  {
+    name: "Cisco Talos",
+    type: "rss" as const,
+    url: "https://blog.talosintelligence.com/rss/",
+    reliability: 0.9,
+  },
+  {
+    name: "SentinelLabs",
+    type: "rss" as const,
+    url: "https://www.sentinelone.com/labs/feed/",
+    reliability: 0.9,
+  },
+  {
+    name: "Rapid7 Threat Intel",
+    type: "rss" as const,
+    url: "https://blog.rapid7.com/tag/threat-intel/rss/",
+    reliability: 0.9,
+  },
+  {
+    name: "ESET WeLiveSecurity",
+    type: "rss" as const,
+    url: "https://www.welivesecurity.com/en/rss/feed/",
+    reliability: 0.85,
   },
 ];
 
@@ -79,18 +115,31 @@ export async function ensureDefaultSources(): Promise<void> {
     }
   }
 
-  // If empty, seed everything; otherwise insert any missing defaults (by URL).
-  if (existing.length === 0) {
-    await db.insert(sources).values([DEFAULT_STIX_SOURCE, ...DEFAULT_RSS_SOURCES]);
-    return;
-  }
+  const defaults = [DEFAULT_STIX_SOURCE, ...DEFAULT_RSS_SOURCES];
+  const now = new Date();
 
-  const existingNow = await db.select().from(sources);
-  const existingUrls = new Set(existingNow.map((s) => s.url));
-  const toInsert = [DEFAULT_STIX_SOURCE, ...DEFAULT_RSS_SOURCES].filter(
-    (s) => !existingUrls.has(s.url)
-  );
-  if (toInsert.length > 0) await db.insert(sources).values(toInsert);
+  // DB-managed sources: upsert defaults so new installs get sane coverage,
+  // but allow turning sources on/off via DB without code changes.
+  await db
+    .insert(sources)
+    .values(
+      defaults.map((s) => ({
+        ...s,
+        enabled: true,
+        lastFetchedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      }))
+    )
+    .onConflictDoUpdate({
+      target: [sources.url],
+      set: {
+        name: sql`excluded.name`,
+        type: sql`excluded.type`,
+        reliability: sql`excluded.reliability`,
+        updatedAt: now,
+      },
+    });
 }
 
 export async function getEnabledSources(type: "rss" | "stix") {

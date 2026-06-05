@@ -21,27 +21,10 @@ import {
   resolveOrCreateActorByName,
   upsertRelationObservation,
 } from "../lib/kg.js";
-
-const SECTORS = [
-  "finance",
-  "healthcare",
-  "government",
-  "education",
-  "energy",
-  "telecom",
-  "defense",
-  "retail",
-  "manufacturing",
-  "technology",
-  "transportation",
-  "critical-infrastructure",
-] as const;
+import { NewDocBudget, parseMaxNewDocsPerRun, shouldIngestRssItem } from "../lib/rss-guardrails.js";
+import { SECTORS, isSector, resolveSector } from "../lib/sectors.js";
 
 type Sector = (typeof SECTORS)[number];
-
-function isSector(x: string): x is Sector {
-  return (SECTORS as readonly string[]).includes(x);
-}
 
 type Extraction = {
   actors: Array<{ name: string }>;
@@ -192,12 +175,21 @@ export async function runAttackAgent() {
   await ensureDefaultSources();
   const db = getDb();
   let disableAiForRun = false;
+  const now = new Date();
+  const budget = new NewDocBudget(parseMaxNewDocsPerRun());
+  const reprocessOkDocs = (process.env["ATTACK_AGENT_REPROCESS_OK_DOCS"] ?? "") === "1";
 
   const rssSources = await getEnabledSources("rss");
   const parser = new Parser();
 
   for (const src of rssSources) {
     console.log(`[AttackAgent] Feed: ${src.name} (${src.url})`);
+    const isNew = src.lastFetchedAt == null;
+    if (isNew) {
+      console.log(
+        `[AttackAgent] New feed detected; limiting to last ${process.env["ATTACK_AGENT_NEW_FEED_BACKFILL_DAYS"] ?? 30} days`
+      );
+    }
     let feed: Parser.Output<unknown>;
     try {
       feed = await parser.parseURL(src.url);
@@ -211,7 +203,21 @@ export async function runAttackAgent() {
       if (!url) continue;
 
       const title = (item.title ?? "").trim() || null;
-      const publishedAt = item.pubDate ? new Date(item.pubDate) : null;
+      const rawDate = (item as any).isoDate ?? item.pubDate ?? null;
+      const publishedAt = rawDate ? new Date(rawDate) : null;
+      const publishedAtSafe =
+        publishedAt && Number.isFinite(publishedAt.getTime()) ? publishedAt : null;
+
+      if (
+        !shouldIngestRssItem({
+          sourceLastFetchedAt: src.lastFetchedAt,
+          itemPublishedAt: publishedAtSafe,
+          now,
+          backfillDays: Number(process.env["ATTACK_AGENT_NEW_FEED_BACKFILL_DAYS"] ?? 30),
+        })
+      ) {
+        continue;
+      }
 
       const existing = await db
         .select({ id: documents.id, status: documents.status, cleanText: documents.cleanText })
@@ -219,7 +225,17 @@ export async function runAttackAgent() {
         .where(eq(documents.url, url))
         .limit(1);
       const existingDoc = existing[0] ?? null;
-      if (existingDoc?.status === "ok") continue;
+      if (existingDoc?.status === "ok" && !reprocessOkDocs) continue;
+
+      if (!existingDoc) {
+        if (!budget.consumeNewDoc()) {
+          console.warn(
+            `[AttackAgent] Budget hit (ATTACK_AGENT_MAX_NEW_DOCS_PER_RUN=${budget.maxNewDocs}). Skipping remaining new docs this run.`
+          );
+          disableAiForRun = true;
+          break;
+        }
+      }
 
       let html: string;
       let cleanText: string | null = existingDoc?.cleanText ?? null;
@@ -252,7 +268,7 @@ export async function runAttackAgent() {
       const docId = await upsertDocument({
         url,
         title,
-        publishedAt,
+        publishedAt: publishedAtSafe,
         cleanText,
         status: "ok",
       });
@@ -355,7 +371,7 @@ export async function runAttackAgent() {
           relationId,
           documentId: docId,
           url,
-          publishedAt,
+          publishedAt: publishedAtSafe,
           excerpt: rec.excerpt ?? "",
           confidence: rec.confidence ?? 0.5,
           chunkId: rec.chunk_index != null ? chunkIdByIndex.get(rec.chunk_index) ?? null : null,
@@ -364,8 +380,8 @@ export async function runAttackAgent() {
 
       for (const rec of extraction.target_sectors ?? []) {
         const actorId = await resolveOrCreateActorByName(rec.actor);
-        const sector = (rec.sector ?? "").toLowerCase();
-        if (!isSector(sector)) continue;
+        const sector = resolveSector(rec.sector ?? "");
+        if (!sector || !isSector(sector)) continue;
         await ensureKgEntity({ kind: "sector", entityId: sector, name: sector });
         const relationId = await upsertRelationObservation({
           type: "actor_targets_sector",
@@ -380,7 +396,7 @@ export async function runAttackAgent() {
           relationId,
           documentId: docId,
           url,
-          publishedAt,
+          publishedAt: publishedAtSafe,
           excerpt: rec.excerpt ?? "",
           confidence: rec.confidence ?? 0.5,
           chunkId: rec.chunk_index != null ? chunkIdByIndex.get(rec.chunk_index) ?? null : null,
@@ -410,7 +426,7 @@ export async function runAttackAgent() {
           relationId,
           documentId: docId,
           url,
-          publishedAt,
+          publishedAt: publishedAtSafe,
           excerpt: rec.excerpt ?? "",
           confidence: rec.confidence ?? 0.5,
           chunkId: rec.chunk_index != null ? chunkIdByIndex.get(rec.chunk_index) ?? null : null,
@@ -435,7 +451,7 @@ export async function runAttackAgent() {
           relationId,
           documentId: docId,
           url,
-          publishedAt,
+          publishedAt: publishedAtSafe,
           excerpt: rec.excerpt ?? "",
           confidence: rec.confidence ?? 0.5,
           chunkId: rec.chunk_index != null ? chunkIdByIndex.get(rec.chunk_index) ?? null : null,
@@ -447,6 +463,10 @@ export async function runAttackAgent() {
       .update(sources)
       .set({ lastFetchedAt: new Date(), updatedAt: new Date() })
       .where(eq(sources.id, src.id));
+
+    if (disableAiForRun && budget.maxNewDocs != null && budget.usedNewDocs >= budget.maxNewDocs) {
+      break;
+    }
   }
 
   console.log("[AttackAgent] Done.");

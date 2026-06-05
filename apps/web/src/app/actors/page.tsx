@@ -148,7 +148,7 @@ export default async function ActorsPage({
         </button>
       </form>
 
-      <ActorMarquee rows={rows} paused={Boolean(query)} />
+      <ActorMarquee rows={rows} />
 
       {Boolean(query) && (
         <div className="text-xs text-zinc-500">

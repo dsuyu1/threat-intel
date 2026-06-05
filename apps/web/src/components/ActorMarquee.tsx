@@ -20,13 +20,6 @@ function getCountryName(iso2: string) {
   }
 }
 
-function repeatToMin<T>(items: T[], min: number) {
-  if (items.length === 0) return items;
-  const out: T[] = [];
-  while (out.length < min) out.push(...items);
-  return out.slice(0, Math.max(min, items.length));
-}
-
 function ActorCard({ row }: { row: ActorRow }) {
   const originLabel = row.originIso2 ? getCountryName(row.originIso2) : "Unknown";
   const originValue = row.originIso2 ? `${originLabel} (${row.originIso2})` : originLabel;
@@ -34,7 +27,7 @@ function ActorCard({ row }: { row: ActorRow }) {
   return (
     <Link
       href={`/actors/${row.actorId}`}
-      className="group block min-w-[340px] max-w-[420px] rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-950/40 backdrop-blur px-5 py-4 transition-transform duration-300 hover:-translate-y-1 hover:bg-white/90 dark:hover:bg-zinc-950/60"
+      className="group block min-w-[340px] max-w-[420px] rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-950/40 backdrop-blur px-5 py-4 transition-colors hover:bg-white/90 dark:hover:bg-zinc-950/60"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -83,33 +76,19 @@ function ActorCard({ row }: { row: ActorRow }) {
   );
 }
 
-function MarqueeRow({
-  items,
-  direction,
-  durationSeconds,
-}: {
-  items: ActorRow[];
-  direction: "left" | "right";
-  durationSeconds: number;
-}) {
-  const loopItems = [...items, ...items];
+function ActorStrip({ items }: { items: ActorRow[] }) {
   return (
-    <div className="overflow-hidden">
-      <div
-        className={`flex w-max gap-5 ${
-          direction === "left" ? "ti-marquee-left" : "ti-marquee-right"
-        }`}
-        style={{ ["--ti-marquee-duration" as any]: `${durationSeconds}s` }}
-      >
-        {loopItems.map((row, idx) => (
-          <ActorCard key={`${row.actorId}:${idx}`} row={row} />
+    <div className="overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex w-max gap-5 pr-8">
+        {items.map((row) => (
+          <ActorCard key={row.actorId} row={row} />
         ))}
       </div>
     </div>
   );
 }
 
-export function ActorMarquee({ rows, paused }: { rows: ActorRow[]; paused: boolean }) {
+export function ActorMarquee({ rows }: { rows: ActorRow[] }) {
   if (rows.length === 0) {
     return (
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/30 px-6 py-10 text-sm text-zinc-600 dark:text-zinc-400">
@@ -118,29 +97,15 @@ export function ActorMarquee({ rows, paused }: { rows: ActorRow[]; paused: boole
     );
   }
 
-  if (paused) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-        {rows.map((row) => (
-          <ActorCard key={row.actorId} row={row} />
-        ))}
-      </div>
-    );
-  }
-
-  const raw1 = rows.filter((_, i) => i % 3 === 0);
-  const raw2 = rows.filter((_, i) => i % 3 === 1);
-  const raw3 = rows.filter((_, i) => i % 3 === 2);
-
-  const row1 = repeatToMin(raw1.length ? raw1 : rows, 10);
-  const row2 = repeatToMin(raw2.length ? raw2 : rows, 10);
-  const row3 = repeatToMin(raw3.length ? raw3 : rows, 10);
+  const row1 = rows.filter((_, i) => i % 3 === 0);
+  const row2 = rows.filter((_, i) => i % 3 === 1);
+  const row3 = rows.filter((_, i) => i % 3 === 2);
 
   return (
     <section className="space-y-5">
-      <MarqueeRow items={row1} direction="left" durationSeconds={70} />
-      <MarqueeRow items={row2} direction="right" durationSeconds={85} />
-      <MarqueeRow items={row3} direction="left" durationSeconds={78} />
+      <ActorStrip items={row1.length ? row1 : rows} />
+      <ActorStrip items={row2.length ? row2 : rows} />
+      <ActorStrip items={row3.length ? row3 : rows} />
     </section>
   );
 }

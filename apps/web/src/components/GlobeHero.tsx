@@ -18,6 +18,7 @@ import type { Feature, FeatureCollection, MultiPolygon, Polygon } from "geojson"
 import type { CountryActorSummary, CountryHeat } from "../lib/country-heat";
 import { isoNumericToIso2, isoNumericToRgb, rgbToIsoNumeric } from "../lib/iso-numeric";
 import { OrbitLoader } from "./OrbitLoader";
+import { ActorIcon } from "./ui/ActorIcon";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -1942,15 +1943,23 @@ export function GlobeHero({ countryHeat }: Props) {
                           style={{ transitionDelay: `${Math.min(logicalIndex, 5) * 35}ms` }}
                         >
                           <div className="flex items-center justify-between gap-3 w-full">
-                            <div className="min-w-0">
-                              <Link
-                                href={`/actors/${a.actorId}`}
-                                className="block text-base font-medium text-zinc-900 dark:text-zinc-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors truncate"
-                              >
-                                {a.name}
-                              </Link>
-                              <div className="text-xs text-zinc-500 dark:text-zinc-600 tracking-wide tabular-nums">
-                                {a.actorId}
+                            <div className="min-w-0 flex items-center gap-3">
+                              <ActorIcon
+                                seed={a.actorId}
+                                size={34}
+                                title={a.name}
+                                className="shrink-0"
+                              />
+                              <div className="min-w-0">
+                                <Link
+                                  href={`/actors/${a.actorId}`}
+                                  className="block text-base font-medium text-zinc-900 dark:text-zinc-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors truncate"
+                                >
+                                  {a.name}
+                                </Link>
+                                <div className="text-xs text-zinc-500 dark:text-zinc-600 tracking-wide tabular-nums">
+                                  {a.actorId}
+                                </div>
                               </div>
                             </div>
                             <div className="text-right shrink-0">

@@ -15,6 +15,7 @@ import { EvidenceDetails } from "../../../components/EvidenceDetails";
 import { SectorWheel } from "../../../components/SectorWheel";
 import { Markdown } from "../../../components/ui/Markdown";
 import { InfoTip } from "../../../components/ui/InfoTip";
+import { ActorIcon } from "../../../components/ui/ActorIcon";
 import { toIsoStringSafe } from "../../../lib/dates";
 
 type EvidenceItem = {
@@ -377,32 +378,44 @@ export default async function ActorPage({
           <span aria-hidden="true">&larr;</span>
           Back to actors
         </Link>
-        <h1 className="text-3xl md:text-4xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
-          {actor.name}
-        </h1>
-        {aliasesShown.length ? (
-          <p className="text-sm text-zinc-500">
-            Also known as{" "}
-            <span className="text-zinc-700 dark:text-zinc-300">
-              {aliasesShown.join(", ")}
-              {aliasesRemaining ? `, and ${aliasesRemaining} more` : ""}
-            </span>
-          </p>
-        ) : null}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-500">
-          <span className="tabular-nums tracking-wide">{actor.entityId}</span>
-          {origins[0] ? (
-            <span className="flex items-center gap-1.5">
-              <span className="text-zinc-600 dark:text-zinc-500">Origin</span>
-              <Link
-                href={`/countries/${origins[0].id}`}
-                className="text-zinc-900 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-              >
-                {origins[0].name}
-              </Link>
-              <span className="tabular-nums tracking-wide text-zinc-500">({origins[0].id})</span>
-            </span>
-          ) : null}
+        <div className="flex items-start gap-4">
+          <ActorIcon
+            seed={actor.entityId}
+            size={54}
+            title={actor.name}
+            className="shrink-0 mt-1"
+          />
+          <div className="min-w-0 space-y-2">
+            <h1 className="text-3xl md:text-4xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+              {actor.name}
+            </h1>
+            {aliasesShown.length ? (
+              <p className="text-sm text-zinc-500">
+                Also known as{" "}
+                <span className="text-zinc-700 dark:text-zinc-300">
+                  {aliasesShown.join(", ")}
+                  {aliasesRemaining ? `, and ${aliasesRemaining} more` : ""}
+                </span>
+              </p>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-500">
+              <span className="tabular-nums tracking-wide">{actor.entityId}</span>
+              {origins[0] ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="text-zinc-600 dark:text-zinc-500">Origin</span>
+                  <Link
+                    href={`/countries/${origins[0].id}`}
+                    className="text-zinc-900 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                  >
+                    {origins[0].name}
+                  </Link>
+                  <span className="tabular-nums tracking-wide text-zinc-500">
+                    ({origins[0].id})
+                  </span>
+                </span>
+              ) : null}
+            </div>
+          </div>
         </div>
       </header>
 

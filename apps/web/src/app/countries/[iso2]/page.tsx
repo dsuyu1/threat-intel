@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb, kgEntities, kgRelations } from "@ti/db";
 import { and, desc, eq } from "drizzle-orm";
+import { ActorIcon } from "../../../components/ui/ActorIcon";
 import { toIsoStringSafe } from "../../../lib/dates";
 
 async function getCountryActors(iso2: string) {
@@ -99,9 +100,12 @@ export default async function CountryPage({
               className="block bg-white dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-950 transition-colors"
             >
               <div className="flex items-center justify-between gap-4">
-                <div>
-                  <div className="text-sm text-zinc-900 dark:text-zinc-100">{a.name}</div>
-                  <div className="text-xs text-zinc-500 tabular-nums tracking-wide">{a.actorId}</div>
+                <div className="min-w-0 flex items-center gap-3">
+                  <ActorIcon seed={a.actorId} size={34} title={a.name} className="shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-sm text-zinc-900 dark:text-zinc-100 truncate">{a.name}</div>
+                    <div className="text-xs text-zinc-500 tabular-nums tracking-wide">{a.actorId}</div>
+                  </div>
                 </div>
                 <div className="text-right">
                   <div className="text-xs text-zinc-500">

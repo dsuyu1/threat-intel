@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ActorIcon } from "./ui/ActorIcon";
 
 type ActorRow = {
   actorId: string;
@@ -30,12 +31,20 @@ function ActorCard({ row }: { row: ActorRow }) {
       className="group block w-full rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-950/40 backdrop-blur px-5 py-4 transition-colors hover:bg-white/90 dark:hover:bg-zinc-950/60"
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-base font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-            {row.name}
-          </div>
-          <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-500 tabular-nums">
-            {row.actorId}
+        <div className="min-w-0 flex items-start gap-3">
+          <ActorIcon
+            seed={row.actorId}
+            size={38}
+            title={row.name}
+            className="shrink-0 mt-0.5"
+          />
+          <div className="min-w-0">
+            <div className="text-base font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+              {row.name}
+            </div>
+            <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-500 tabular-nums">
+              {row.actorId}
+            </div>
           </div>
         </div>
         <div className="text-right">

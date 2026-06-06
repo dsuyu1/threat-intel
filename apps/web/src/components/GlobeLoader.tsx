@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { OrbitLoader } from "./OrbitLoader";
 import type { CountryHeat } from "../lib/country-heat";
+import type { GlobalNewsItem } from "../lib/global-news";
 
 const GlobeHero = dynamic(
   () => import("./GlobeHero").then(m => ({ default: m.GlobeHero })),
@@ -16,6 +17,14 @@ const GlobeHero = dynamic(
   }
 );
 
-export function GlobeLoader({ countryHeat }: { countryHeat: CountryHeat[] }) {
-  return <GlobeHero countryHeat={countryHeat} />;
+export function GlobeLoader({
+  countryHeat,
+  newsItems,
+  newsSchemaReady,
+}: {
+  countryHeat: CountryHeat[];
+  newsItems: GlobalNewsItem[];
+  newsSchemaReady: boolean;
+}) {
+  return <GlobeHero countryHeat={countryHeat} newsItems={newsItems} newsSchemaReady={newsSchemaReady} />;
 }

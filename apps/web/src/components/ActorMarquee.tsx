@@ -24,10 +24,12 @@ function getCountryName(iso2: string) {
 function ActorCard({ row }: { row: ActorRow }) {
   const originLabel = row.originIso2 ? getCountryName(row.originIso2) : "Unknown";
   const originValue = row.originIso2 ? `${originLabel} (${row.originIso2})` : originLabel;
+  const anchorId = `actor-${row.actorId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
 
   return (
     <Link
       href={`/actors/${row.actorId}`}
+      id={anchorId}
       className="group block w-full rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-950/40 backdrop-blur px-5 py-4 transition-colors hover:bg-white/90 dark:hover:bg-zinc-950/60"
     >
       <div className="flex items-start justify-between gap-3">

@@ -1,15 +1,27 @@
 import OpenAI from "openai";
 
 let _openaiClient: OpenAI | null = null;
+const _openaiClientsByKey = new Map<string, OpenAI>();
 
 export type AiProvider = "openai" | "gemini";
 
-export function getAiProvider(): AiProvider {
+export type AiOverrides = {
+  provider?: AiProvider;
+  openaiApiKey?: string;
+  openaiBaseURL?: string;
+  geminiApiKey?: string;
+  chatModel?: string;
+  embeddingModel?: string;
+};
+
+export function getAiProvider(ai?: AiOverrides): AiProvider {
+  if (ai?.provider === "openai" || ai?.provider === "gemini") return ai.provider;
+
   const forced = (process.env["AI_PROVIDER"] ?? "").toLowerCase();
   if (forced === "openai" || forced === "gemini") return forced;
 
-  const openaiKey = process.env["OPENAI_API_KEY"];
-  const geminiKey = process.env["GEMINI_API_KEY"];
+  const openaiKey = ai?.openaiApiKey ?? process.env["OPENAI_API_KEY"];
+  const geminiKey = ai?.geminiApiKey ?? process.env["GEMINI_API_KEY"];
 
   // If an OpenAI key is present, prefer OpenAI by default (unless explicitly forced to Gemini).
   // This avoids surprising "Gemini by default" behavior in environments where both keys exist.
@@ -27,17 +39,32 @@ function normalizeGeminiModel(model: string): { model: string; pathModel: string
   return { model: normalized, pathModel: normalized.replace(/^models\//, "") };
 }
 
-export function getOpenAIClient(): OpenAI {
-  if (_openaiClient) return _openaiClient;
+function openAiCacheKey(params: { apiKey: string; baseURL?: string | undefined }) {
+  const head = params.apiKey.slice(0, 12);
+  return `${params.baseURL ?? ""}|${head}`;
+}
 
-  const openaiKey = process.env["OPENAI_API_KEY"];
-  const baseURL = process.env["OPENAI_BASE_URL"];
+export function getOpenAIClient(ai?: AiOverrides): OpenAI {
+  const openaiKey = ai?.openaiApiKey ?? process.env["OPENAI_API_KEY"];
+  const baseURL = ai?.openaiBaseURL ?? process.env["OPENAI_BASE_URL"];
 
-  const provider = getAiProvider();
+  const provider = getAiProvider(ai);
 
   if (provider === "openai") {
     if (!openaiKey) throw new Error("Set OPENAI_API_KEY in your environment or repo .env");
+    // When a per-user key is provided, cache by key+baseURL so multiple calls within a single
+    // lambda invocation don't recreate clients.
+    if (ai?.openaiApiKey) {
+      const k = openAiCacheKey({ apiKey: openaiKey, baseURL });
+      const existing = _openaiClientsByKey.get(k);
+      if (existing) return existing;
+      const client = new OpenAI({ apiKey: openaiKey, ...(baseURL ? { baseURL } : {}) });
+      _openaiClientsByKey.set(k, client);
+      return client;
+    }
+
     _openaiClient = new OpenAI({ apiKey: openaiKey, ...(baseURL ? { baseURL } : {}) });
+    return _openaiClient;
   } else {
     // We intentionally do not use the OpenAI compatibility endpoint for Gemini in v1.
     // It's optional/preview and can behave differently across keys/tiers.
@@ -45,17 +72,18 @@ export function getOpenAIClient(): OpenAI {
       "OpenAI client requested, but AI provider is Gemini. Use `generateText()` / `embedTexts()` instead."
     );
   }
-  return _openaiClient;
 }
 
-export function getChatModel(): string {
+export function getChatModel(ai?: AiOverrides): string {
+  if (ai?.chatModel) return ai.chatModel;
   if (process.env["AI_MODEL"]) return process.env["AI_MODEL"];
-  return getAiProvider() === "openai" ? "gpt-4o-mini" : "gemini-2.0-flash";
+  return getAiProvider(ai) === "openai" ? "gpt-4o-mini" : "gemini-2.0-flash";
 }
 
-export function getEmbeddingModel(): string {
+export function getEmbeddingModel(ai?: AiOverrides): string {
+  if (ai?.embeddingModel) return ai.embeddingModel;
   if (process.env["EMBEDDING_MODEL"]) return process.env["EMBEDDING_MODEL"];
-  return getAiProvider() === "openai" ? "text-embedding-3-small" : "models/gemini-embedding-001";
+  return getAiProvider(ai) === "openai" ? "text-embedding-3-small" : "models/gemini-embedding-001";
 }
 
 export function normalizeEmbedding1536(embedding: number[]): number[] {
@@ -136,13 +164,13 @@ function shouldRetry429(params: { retryAfterMs: number | null; bodyText: string 
   return true;
 }
 
-export async function embedTexts(texts: string[]): Promise<number[][]> {
-  const provider = getAiProvider();
+export async function embedTexts(texts: string[], ai?: AiOverrides): Promise<number[][]> {
+  const provider = getAiProvider(ai);
   if (provider === "openai") {
-    const client = getOpenAIClient();
+    const client = getOpenAIClient(ai);
     try {
       const res = await client.embeddings.create({
-        model: getEmbeddingModel(),
+        model: getEmbeddingModel(ai),
         input: texts,
       });
       return res.data.map((d) => normalizeEmbedding1536(d.embedding));
@@ -159,10 +187,10 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
     }
   }
 
-  const geminiKey = process.env["GEMINI_API_KEY"];
+  const geminiKey = ai?.geminiApiKey ?? process.env["GEMINI_API_KEY"];
   if (!geminiKey) throw new Error("Set GEMINI_API_KEY to generate embeddings");
 
-  const { model, pathModel } = normalizeGeminiModel(getEmbeddingModel());
+  const { model, pathModel } = normalizeGeminiModel(getEmbeddingModel(ai));
 
   const batchUrl = `https://generativelanguage.googleapis.com/v1beta/models/${pathModel}:batchEmbedContents?key=${encodeURIComponent(
     geminiKey
@@ -273,15 +301,16 @@ export async function generateText(params: {
   temperature?: number;
   maxTokens?: number;
   jsonMode?: boolean;
+  ai?: AiOverrides;
 }): Promise<string> {
-  const provider = getAiProvider();
+  const provider = getAiProvider(params.ai);
   const temperature = params.temperature ?? 0.1;
   const maxTokens = params.maxTokens ?? 800;
 
   if (provider === "openai") {
-    const client = getOpenAIClient();
+    const client = getOpenAIClient(params.ai);
     const res = await client.chat.completions.create({
-      model: getChatModel(),
+      model: getChatModel(params.ai),
       messages: [{ role: "user", content: params.prompt }],
       ...(params.jsonMode ? { response_format: { type: "json_object" as const } } : {}),
       temperature,
@@ -290,10 +319,10 @@ export async function generateText(params: {
     return res.choices[0]?.message?.content ?? "";
   }
 
-  const geminiKey = process.env["GEMINI_API_KEY"];
+  const geminiKey = params.ai?.geminiApiKey ?? process.env["GEMINI_API_KEY"];
   if (!geminiKey) throw new Error("Set GEMINI_API_KEY to generate content");
 
-  const { pathModel } = normalizeGeminiModel(getChatModel());
+  const { pathModel } = normalizeGeminiModel(getChatModel(params.ai));
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${pathModel}:generateContent?key=${encodeURIComponent(
     geminiKey
   )}`;

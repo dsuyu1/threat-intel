@@ -4,6 +4,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb, findings } from "@ti/db";
 import { eq } from "drizzle-orm";
+import { CvssVolumeBar } from "../../../components/CvssVolumeBar";
+import { fixText } from "../../../lib/text";
 
 async function getFindingById(id: string) {
   const db = getDb();
@@ -41,9 +43,9 @@ export default async function FindingPage({
           href="/findings"
           className="text-sm text-zinc-500 hover:text-zinc-200 transition-colors"
         >
-          â† Back to findings
+          ← Back to findings
         </Link>
-        <h1 className="text-xl font-semibold text-zinc-100">{finding.title}</h1>
+        <h1 className="text-xl font-semibold text-zinc-100">{fixText(finding.title)}</h1>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500">
           <span className="tracking-wide">{finding.agent}</span>
           {finding.cveId && <span className="tabular-nums tracking-wide">{finding.cveId}</span>}
@@ -65,27 +67,45 @@ export default async function FindingPage({
       {finding.summary && (
         <section className="space-y-2">
           <h1 className="text-sm font-semibold text-zinc-200">Summary</h1>
-          <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
-            {finding.summary}
-          </p>
+            <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
+              {fixText(finding.summary)}
+            </p>
         </section>
       )}
 
       {(finding.cvssScore || finding.cvssVector) && (
-        <section className="space-y-2">
+        <section className="space-y-3">
           <h1 className="text-sm font-semibold text-zinc-200">Scoring</h1>
-          <div className="text-sm text-zinc-300 space-y-1">
+          <div
+            className={
+              finding.cvssScore
+                ? "grid gap-4 sm:grid-cols-[auto_1fr] items-start"
+                : "space-y-2"
+            }
+          >
             {finding.cvssScore && (
-              <div className="flex items-center gap-2">
-                <span className="text-zinc-500 text-xs">CVSS</span>
-                <span className="tabular-nums font-medium">{parseFloat(finding.cvssScore).toFixed(1)}</span>
+              <div className="shrink-0">
+                <CvssVolumeBar
+                  score={parseFloat(finding.cvssScore)}
+                  className="h-[140px] w-5"
+                />
               </div>
             )}
-            {finding.cvssVector && (
-              <div className="text-xs text-zinc-400 break-all tabular-nums">
-                {finding.cvssVector}
-              </div>
-            )}
+            <div className="text-sm text-zinc-300 space-y-1">
+              {finding.cvssScore && (
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-500 text-xs">CVSS</span>
+                  <span className="tabular-nums font-medium">
+                    {parseFloat(finding.cvssScore).toFixed(1)}
+                  </span>
+                </div>
+              )}
+              {finding.cvssVector && (
+                <div className="text-xs text-zinc-400 break-all tabular-nums">
+                  {finding.cvssVector}
+                </div>
+              )}
+            </div>
           </div>
         </section>
       )}
@@ -117,7 +137,7 @@ export default async function FindingPage({
                 rel="noopener noreferrer"
                 className="text-blue-500 hover:text-blue-400 transition-colors break-all"
               >
-                Source â†—
+                Source ↗
               </a>
             )}
             {finding.pocUrl && (
@@ -127,7 +147,7 @@ export default async function FindingPage({
                 rel="noopener noreferrer"
                 className="text-blue-500 hover:text-blue-400 transition-colors break-all"
               >
-                PoC â†—
+                PoC ↗
               </a>
             )}
           </div>

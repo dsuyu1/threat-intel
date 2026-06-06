@@ -1,9 +1,27 @@
-import type { Finding } from "@ti/db";
-import { CvssGauge } from "./CvssGauge";
+import { CvssVolumeBar } from "./CvssVolumeBar";
+
+export type FindingCardModel = {
+  id: string;
+  agent: string;
+  title: string;
+  summary: string | null;
+  severity: string | null;
+  cvssScore: string | null;
+  cvssVector: string | null;
+  cveId: string | null;
+  tags: string[];
+  sourceUrl: string | null;
+  sourceTitle: string | null;
+  pocUrl: string | null;
+  pocLevel: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+};
 
 interface Props {
-  finding: Finding;
-  teaser?: boolean; // true = paywall-blurred version on homepage
+  finding: FindingCardModel;
+  teaser?: boolean; // paywall-blurred version on homepage
+  className?: string;
 }
 
 const AGENT_LABELS: Record<string, string> = {
@@ -22,83 +40,92 @@ const AGENT_COLORS: Record<string, string> = {
   malware: "bg-yellow-900/50 text-yellow-300 border-yellow-800",
 };
 
-const SEVERITY_DOT: Record<string, string> = {
-  critical: "bg-red-500",
-  high: "bg-orange-500",
-  medium: "bg-yellow-500",
-  low: "bg-green-500",
-  info: "bg-gray-500",
-};
+function parseCvss(score: string | null) {
+  if (!score) return null;
+  const n = Number(score);
+  return Number.isFinite(n) ? n : null;
+}
 
-export function FindingCard({ finding, teaser = false }: Props) {
+function hasTag(tags: string[], t: string) {
+  const needle = t.toLowerCase();
+  return tags.some((x) => x.toLowerCase() === needle);
+}
+
+function hasPoc(f: FindingCardModel) {
+  if (f.pocUrl) return true;
+  return hasTag(f.tags, "githubpoc");
+}
+
+function fmtWhen(iso: string | null) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+}
+
+export function FindingCard({ finding, teaser = false, className = "" }: Props) {
   const agentLabel = AGENT_LABELS[finding.agent] ?? finding.agent;
   const agentColor =
     AGENT_COLORS[finding.agent] ?? "bg-gray-800 text-gray-400 border-gray-700";
-  const severityDot = finding.severity
-    ? SEVERITY_DOT[finding.severity] ?? "bg-gray-500"
-    : null;
 
-  const tags: string[] = (() => {
-    try {
-      return finding.tags ? JSON.parse(finding.tags) : [];
-    } catch {
-      return [];
-    }
-  })();
+  const score = parseCvss(finding.cvssScore);
+  const isKev = hasTag(finding.tags, "kev");
+  const isExploited = hasTag(finding.tags, "actively-exploited") || isKev;
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-700 transition-colors">
+    <div
+      className={[
+        "bg-white dark:bg-[#141414] border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors",
+        className,
+      ].join(" ")}
+    >
       <div className="flex items-start gap-4">
-        {/* CVSS gauge (only for vuln/exploit with a score) */}
-        {finding.cvssScore && (
-          <div className="shrink-0 hidden sm:block">
-            <CvssGauge score={parseFloat(finding.cvssScore)} size={100} />
+        {(finding.agent === "vuln" || finding.agent === "exploit") && score != null ? (
+          <div className="shrink-0 pt-0.5">
+            <CvssVolumeBar score={score} className="h-[76px] w-4 sm:h-[100px]" />
           </div>
-        )}
+        ) : null}
 
         <div className="flex-1 min-w-0">
-          {/* Header row */}
           <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span
-              className={`text-xs font-medium px-2 py-0.5 rounded border ${agentColor}`}
-            >
+            <span className={`text-xs font-medium px-2 py-0.5 rounded border ${agentColor}`}>
               {agentLabel}
             </span>
 
-            {finding.cveId && (
-              <span className="text-xs text-gray-400 tabular-nums tracking-wide">
-                {finding.cveId}
+            {score != null ? (
+              <span className="text-xs text-gray-400 tabular-nums">
+                {score.toFixed(1)}
               </span>
+            ) : (
+              <span className="text-xs text-gray-500 tabular-nums">Unscored</span>
             )}
 
-            {severityDot && (
-              <span className="flex items-center gap-1 text-xs text-gray-400">
-                <span className={`w-2 h-2 rounded-full ${severityDot}`} />
-                {finding.severity}
+            {isExploited ? (
+              <span className="text-xs bg-fuchsia-950 border border-fuchsia-800 text-fuchsia-300 px-2 py-0.5 rounded font-medium">
+                ⚡ Exploited
               </span>
-            )}
+            ) : null}
 
-            {/* KEV badge */}
-            {tags.includes("kev") && (
+            {isKev ? (
               <span className="text-xs bg-red-950 border border-red-800 text-red-400 px-2 py-0.5 rounded font-medium">
                 ⚠ CISA KEV
               </span>
-            )}
+            ) : null}
+
+            {hasPoc(finding) ? (
+              <span className="text-xs bg-zinc-900 border border-zinc-800 text-zinc-300 px-2 py-0.5 rounded">
+                PoC
+              </span>
+            ) : null}
 
             <span className="ml-auto text-xs text-gray-600">
-              {finding.publishedAt
-                ? new Date(finding.publishedAt).toLocaleDateString()
-                : ""}
+              {fmtWhen(finding.publishedAt ?? finding.createdAt)}
             </span>
           </div>
 
-          {/* Title */}
-          <h3 className="text-sm font-semibold text-white mb-1 line-clamp-2">
-            {finding.title}
-          </h3>
+          <h3 className="text-sm font-semibold text-white mb-1 line-clamp-2">{finding.title}</h3>
 
-          {/* Summary — blurred for teaser */}
-          {finding.summary && (
+          {finding.summary ? (
             <p
               className={`text-sm text-gray-400 line-clamp-3 ${
                 teaser ? "blur-sm select-none pointer-events-none" : ""
@@ -106,36 +133,47 @@ export function FindingCard({ finding, teaser = false }: Props) {
             >
               {finding.summary}
             </p>
-          )}
+          ) : null}
 
-          {/* Tags */}
-          {tags.length > 0 && !tags.every((t) => t === "kev") && (
+          {finding.tags.length > 0 && !finding.tags.every((t) => t === "kev") ? (
             <div className="flex flex-wrap gap-1 mt-2">
-              {tags
+              {finding.tags
                 .filter((t) => t !== "kev" && t !== "actively-exploited")
                 .slice(0, 4)
                 .map((tag) => (
-                  <span
-                    key={tag}
-                    className="text-xs bg-gray-800 text-gray-500 px-2 py-0.5 rounded"
-                  >
+                  <span key={tag} className="text-xs bg-gray-800 text-gray-500 px-2 py-0.5 rounded">
                     {tag}
                   </span>
                 ))}
             </div>
-          )}
+          ) : null}
 
-          {/* Source link */}
-          {finding.sourceUrl && !teaser && (
-            <a
-              href={finding.sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-blue-500 hover:text-blue-400 mt-2 inline-block transition-colors"
-            >
-              Source ↗
-            </a>
-          )}
+          {!teaser ? (
+            <div className="flex items-center gap-3 mt-2">
+              {finding.sourceUrl ? (
+                <a
+                  href={finding.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-500 hover:text-blue-400 transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Source →
+                </a>
+              ) : null}
+              {finding.pocUrl ? (
+                <a
+                  href={finding.pocUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-500 hover:text-blue-400 transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  PoC →
+                </a>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

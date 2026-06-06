@@ -10,7 +10,7 @@ import {
   kgEvidence,
   kgRelations,
 } from "@ti/db";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Pentagraph } from "../../../components/Pentagraph";
 import { EvidenceDetails } from "../../../components/EvidenceDetails";
@@ -19,6 +19,7 @@ import { SimilaritySpokes } from "../../../components/SimilaritySpokes";
 import { Markdown } from "../../../components/ui/Markdown";
 import { InfoTip } from "../../../components/ui/InfoTip";
 import { ActorIcon } from "../../../components/ui/ActorIcon";
+import { CsvExportButton } from "../../../components/ui/CsvExportButton";
 import { toIsoStringSafe } from "../../../lib/dates";
 
 type EvidenceItem = {
@@ -198,9 +199,9 @@ async function getActorFacetCounts(actorId: string) {
 
   const [base] = await db
     .select({
-      ttpCount: sql<number>`count(distinct case when ${kgRelations.type} = 'actor_uses_technique' then ${kgRelations.toId} end)`,
-      sectorCount: sql<number>`count(distinct case when ${kgRelations.type} = 'actor_targets_sector' then ${kgRelations.toId} end)`,
-      cveCount: sql<number>`count(distinct case when ${kgRelations.type} = 'actor_exploits_cve' then ${kgRelations.toId} end)`,
+      ttpCount: sql<number>`count(distinct case when ${kgRelations.type} = 'actor_uses_technique' and ${kgRelations.toKind} = 'technique' then ${kgRelations.toId} end)`,
+      sectorCount: sql<number>`count(distinct case when ${kgRelations.type} = 'actor_targets_sector' and ${kgRelations.toKind} = 'sector' then ${kgRelations.toId} end)`,
+      cveCount: sql<number>`count(distinct case when ${kgRelations.type} = 'actor_exploits_cve' and ${kgRelations.toKind} = 'cve' then ${kgRelations.toId} end)`,
     })
     .from(kgRelations)
     .where(and(eq(kgRelations.fromKind, "actor"), eq(kgRelations.fromId, actorId)));
@@ -324,6 +325,47 @@ async function getTopMitigationsForActor(actorId: string) {
   });
 }
 
+async function getAllMitigationsForActor(actorId: string) {
+  const db = getDb();
+  const a2t = alias(kgRelations, "a2t");
+  const t2m = alias(kgRelations, "t2m");
+
+  const rows = await db
+    .select({
+      id: t2m.toId,
+      name: kgEntities.name,
+      count: sql<number>`count(*)`,
+    })
+    .from(a2t)
+    .innerJoin(
+      t2m,
+      and(
+        eq(t2m.type, "technique_mitigated_by"),
+        eq(t2m.fromKind, "technique"),
+        eq(t2m.toKind, "mitigation"),
+        eq(t2m.fromId, a2t.toId)
+      )
+    )
+    .leftJoin(kgEntities, and(eq(kgEntities.kind, "mitigation"), eq(kgEntities.entityId, t2m.toId)))
+    .where(
+      and(
+        eq(a2t.type, "actor_uses_technique"),
+        eq(a2t.fromKind, "actor"),
+        eq(a2t.toKind, "technique"),
+        eq(a2t.fromId, actorId)
+      )
+    )
+    .groupBy(t2m.toId, kgEntities.name)
+    .orderBy(desc(sql`count(*)`), asc(t2m.toId))
+    .limit(200);
+
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name ?? r.id,
+    count: Number(r.count ?? 0),
+  }));
+}
+
 async function getNeighbors(actorId: string) {
   const db = getDb();
   const rows = await db
@@ -388,15 +430,28 @@ export default async function ActorPage({
   const aliasesShown = aliasesUnique.slice(0, 6);
   const aliasesRemaining = Math.max(0, aliasesUnique.length - aliasesShown.length);
 
-  const [origins, sectors, techniques, cves, campaigns, neighbors, facetCounts, mitigations] = await Promise.all([
+  const [
+    origins,
+    sectorsTop,
+    sectorsAll,
+    techniques,
+    cves,
+    campaigns,
+    neighbors,
+    facetCounts,
+    mitigationsTop,
+    mitigationsAll,
+  ] = await Promise.all([
     getTopRelations({ actorId, type: "actor_origin_country", toKind: "country", limit: 3 }),
     getTopRelations({ actorId, type: "actor_targets_sector", toKind: "sector", limit: 10 }),
+    getTopRelations({ actorId, type: "actor_targets_sector", toKind: "sector", limit: 200 }),
     getTopRelations({ actorId, type: "actor_uses_technique", toKind: "technique", limit: 12 }),
     getTopRelations({ actorId, type: "actor_exploits_cve", toKind: "cve", limit: 12 }),
     getTopRelations({ actorId, type: "actor_attributed_campaign", toKind: "campaign", limit: 20 }),
     getNeighbors(actorId),
     getActorFacetCounts(actorId),
     getTopMitigationsForActor(actorId),
+    getAllMitigationsForActor(actorId),
   ]);
 
   const sumSupport = (items: Array<{ support: number }>) =>
@@ -413,7 +468,7 @@ export default async function ActorPage({
       label: "Sectors",
       value: String(facetCounts.sectorCount),
       sub: "Weighted (decayed support)",
-      weight: sumSupport(sectors),
+      weight: sumSupport(sectorsAll),
     },
     {
       label: "TTPs",
@@ -431,17 +486,21 @@ export default async function ActorPage({
       label: "Mitigations",
       value: String(facetCounts.mitigationCount),
       sub: "Derived from ATT&CK",
-      weight: mitigations.reduce((acc, m) => acc + (Number.isFinite(m.count) ? m.count : 0), 0),
+      weight: mitigationsAll.reduce((acc, m) => acc + (Number.isFinite(m.count) ? m.count : 0), 0),
     },
   ];
 
   const GRAPH_BRANCH_MAX = 10;
   const branches = [
     { items: origins.slice(0, GRAPH_BRANCH_MAX).map((o) => ({ label: o.id, weight: o.support })) },
-    { items: sectors.slice(0, GRAPH_BRANCH_MAX).map((s) => ({ label: s.name, weight: s.support })) },
+    { items: sectorsTop.slice(0, GRAPH_BRANCH_MAX).map((s) => ({ label: s.name, weight: s.support })) },
     { items: techniques.slice(0, GRAPH_BRANCH_MAX).map((t) => ({ label: t.id, weight: t.support })) },
     { items: cves.slice(0, GRAPH_BRANCH_MAX).map((c) => ({ label: c.id, weight: c.support })) },
-    { items: mitigations.slice(0, GRAPH_BRANCH_MAX).map((m) => ({ label: m.id, weight: m.count })) },
+    {
+      items: mitigationsTop
+        .slice(0, GRAPH_BRANCH_MAX)
+        .map((m) => ({ label: m.id, weight: m.count })),
+    },
   ];
 
   const mitreDesc = actor.description
@@ -454,13 +513,21 @@ export default async function ActorPage({
   return (
     <div className="max-w-[1440px] mx-auto px-6 md:px-10 py-10">
       <header className="space-y-3">
-        <Link
-          href="/actors"
-          className="inline-flex items-center gap-2 text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-500 dark:hover:text-zinc-200 transition-colors"
-        >
-          <span aria-hidden="true">&larr;</span>
-          Back to actors
-        </Link>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link
+            href="/actors"
+            className="inline-flex items-center gap-2 text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-500 dark:hover:text-zinc-200 transition-colors"
+          >
+            <span aria-hidden="true">&larr;</span>
+            Back to actors
+          </Link>
+          <Link
+            href={`/actors?view=graph&focus=${encodeURIComponent(actor.entityId)}`}
+            className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-black/30 px-3 py-1.5 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-white dark:hover:bg-black/40"
+          >
+            Open relationship graph <span aria-hidden="true">→</span>
+          </Link>
+        </div>
         <div className="flex items-start gap-4">
           <ActorIcon
             seed={actor.entityId}
@@ -593,49 +660,159 @@ export default async function ActorPage({
             )}
           </section>
 
-          <section>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                 <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Mitigations</h1>
-                <InfoTip
-                  title="ATT&CK"
-                  body="Mitigations are derived from MITRE ATT&CK technique ↔ mitigation mappings."
-                />
-              </div>
-              <span className="text-sm text-zinc-500 tabular-nums">
-                {formatShownOfTotal(mitigations.length, facetCounts.mitigationCount)}
-              </span>
-            </div>
-            <p className="mt-2 text-sm text-zinc-500">
-              Derived by mapping the actor&apos;s techniques to MITRE ATT&amp;CK mitigations.
-            </p>
-            {mitigations.length ? (
-              <MitigationBars items={mitigations} />
-            ) : (
-              <p className="mt-3 text-sm text-zinc-500">No mitigations mapped yet.</p>
-            )}
-          </section>
+          <div className="space-y-6">
+            <section>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Mitigations</h1>
+                  <InfoTip
+                    title="ATT&CK"
+                    body="Mitigations are derived from MITRE ATT&CK technique ↔ mitigation mappings."
+                  />
+                </div>
 
-          <section className="space-y-3">
-            <div className="flex items-baseline justify-between gap-3">
-              <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Target Sectors</h1>
-              <span className="text-sm text-zinc-500 tabular-nums">
-                {formatShownOfTotal(sectors.length, facetCounts.sectorCount)}
-              </span>
-            </div>
-            <SectorWheel
-              sectors={sectors.map((s) => ({
-                id: s.id,
-                label: s.name,
-                weight: s.support,
-              }))}
-            />
-            {!sectors.length ? (
-              <p className="text-sm text-zinc-500">
-                No sector attributions yet. This fills in as RSS reports are ingested and parsed.
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-sm text-zinc-500 tabular-nums">
+                    {formatShownOfTotal(mitigationsTop.length, facetCounts.mitigationCount)}
+                  </span>
+                  <CsvExportButton
+                    filename={`actor-${actorId}-mitigations.csv`}
+                    rows={mitigationsAll}
+                    columns={[
+                      { header: "mitigation_id", key: "id" },
+                      { header: "mitigation_name", key: "name" },
+                      { header: "technique_count", key: "count" },
+                    ]}
+                  />
+                </div>
+              </div>
+
+              <p className="mt-2 text-sm text-zinc-500">
+                Derived by mapping the actor&apos;s techniques to MITRE ATT&amp;CK mitigations.
               </p>
-            ) : null}
-          </section>
+
+              {mitigationsTop.length ? (
+                <>
+                  <MitigationBars items={mitigationsTop} />
+
+                  {mitigationsAll.length > mitigationsTop.length ? (
+                    <details className="mt-3 rounded-xl border border-zinc-200 dark:border-zinc-900/80 bg-white/70 dark:bg-black/35">
+                      <summary className="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 py-3">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                            Show all mitigations
+                          </div>
+                          <div className="text-xs text-zinc-500 tabular-nums">
+                            {Math.min(mitigationsAll.length, facetCounts.mitigationCount)} total
+                          </div>
+                        </div>
+                      </summary>
+                      <div className="px-4 pb-4">
+                        <div className="max-h-[420px] overflow-auto rounded-lg border border-zinc-200 dark:border-zinc-900/80">
+                          <table className="w-full text-sm">
+                            <thead className="sticky top-0 bg-white/90 dark:bg-black/70">
+                              <tr className="text-left text-xs text-zinc-600 dark:text-zinc-400">
+                                <th className="px-3 py-2 font-medium">Mitigation</th>
+                                <th className="px-3 py-2 font-medium">ID</th>
+                                <th className="px-3 py-2 font-medium text-right">Techniques</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-900/80">
+                              {mitigationsAll.map((m) => (
+                                <tr key={m.id} className="text-zinc-900 dark:text-zinc-100">
+                                  <td className="px-3 py-2">{m.name}</td>
+                                  <td className="px-3 py-2 text-xs text-zinc-500 tabular-nums">{m.id}</td>
+                                  <td className="px-3 py-2 text-right text-zinc-500 tabular-nums">{m.count}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </details>
+                  ) : null}
+                </>
+              ) : (
+                <p className="mt-3 text-sm text-zinc-500">No mitigations mapped yet.</p>
+              )}
+            </section>
+
+            <section className="space-y-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Target Sectors</h1>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-sm text-zinc-500 tabular-nums">
+                    {formatShownOfTotal(sectorsTop.length, facetCounts.sectorCount)}
+                  </span>
+                  <CsvExportButton
+                    filename={`actor-${actorId}-target-sectors.csv`}
+                    rows={sectorsAll}
+                    columns={[
+                      { header: "sector_id", key: "id" },
+                      { header: "sector_name", key: "name" },
+                      { header: "support", key: "support" },
+                      { header: "confidence", key: "confidence" },
+                      { header: "evidence_count", key: "evidence.length" },
+                    ]}
+                  />
+                </div>
+              </div>
+
+              <SectorWheel
+                sectors={sectorsTop.map((s) => ({
+                  id: s.id,
+                  label: s.name,
+                  weight: s.support,
+                }))}
+              />
+
+              {!sectorsAll.length ? (
+                <p className="text-sm text-zinc-500">
+                  No sector attributions yet. This fills in as RSS reports are ingested and parsed.
+                </p>
+              ) : sectorsAll.length > sectorsTop.length ? (
+                <details className="rounded-xl border border-zinc-200 dark:border-zinc-900/80 bg-white/70 dark:bg-black/35">
+                  <summary className="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 py-3">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        Show all sectors
+                      </div>
+                      <div className="text-xs text-zinc-500 tabular-nums">
+                        {Math.min(sectorsAll.length, facetCounts.sectorCount)} total
+                      </div>
+                    </div>
+                  </summary>
+                  <div className="px-4 pb-4">
+                    <div className="max-h-[420px] overflow-auto rounded-lg border border-zinc-200 dark:border-zinc-900/80">
+                      <table className="w-full text-sm">
+                        <thead className="sticky top-0 bg-white/90 dark:bg-black/70">
+                          <tr className="text-left text-xs text-zinc-600 dark:text-zinc-400">
+                            <th className="px-3 py-2 font-medium">Sector</th>
+                            <th className="px-3 py-2 font-medium text-right">Support</th>
+                            <th className="px-3 py-2 font-medium text-right">Confidence</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-200 dark:divide-zinc-900/80">
+                          {sectorsAll.map((s) => (
+                            <tr key={s.id} className="text-zinc-900 dark:text-zinc-100">
+                              <td className="px-3 py-2">{s.name}</td>
+                              <td className="px-3 py-2 text-right text-zinc-500 tabular-nums">
+                                {Math.round(s.support)}
+                              </td>
+                              <td className="px-3 py-2 text-right text-zinc-500 tabular-nums">
+                                {Math.round(s.confidence * 100)}%
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </details>
+              ) : null}
+            </section>
+          </div>
         </div>
 
         <div className="space-y-10">
@@ -1183,8 +1360,9 @@ function MitigationBars({
 }) {
   const max = Math.max(1, ...items.map((m) => Math.max(0, m.count ?? 0)));
   return (
-    <div className="mt-3 rounded-xl border border-zinc-200 dark:border-zinc-900/80 bg-white/70 dark:bg-black/35 px-4 py-3">
-      <div className="space-y-3">
+    <div className="mt-3 rounded-xl border border-zinc-200 dark:border-zinc-900/80 bg-white/70 dark:bg-black/35 px-3 py-2">
+      <div className="lg:max-h-[420px] overflow-auto pr-1">
+        <div className="space-y-2">
         {items.map((m) => {
           const w = `${Math.round((Math.max(0, m.count) / max) * 100)}%`;
           return (
@@ -1192,7 +1370,7 @@ function MitigationBars({
               <summary className="list-none [&::-webkit-details-marker]:hidden cursor-pointer">
                 <div className="flex items-baseline justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                    <div className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100 truncate">
                       {m.name}
                     </div>
                     <div className="text-xs text-zinc-500 tabular-nums tracking-wide">{m.id}</div>
@@ -1201,14 +1379,11 @@ function MitigationBars({
                     {m.count}
                   </div>
                 </div>
-                <div className="mt-2 h-2 w-full rounded-full bg-zinc-200/70 dark:bg-zinc-800/60 overflow-hidden">
+                <div className="mt-1.5 h-1.5 w-full rounded-full bg-zinc-200/70 dark:bg-zinc-800/60 overflow-hidden">
                   <div
                     className="h-full rounded-full bg-zinc-700/60 dark:bg-zinc-200/40"
                     style={{ width: w }}
                   />
-                </div>
-                <div className="mt-1 text-[11px] text-zinc-500">
-                  <span className="opacity-70 group-open:hidden">Click for evidence</span>
                 </div>
               </summary>
               <div className="mt-2">
@@ -1217,6 +1392,7 @@ function MitigationBars({
             </details>
           );
         })}
+        </div>
       </div>
     </div>
   );

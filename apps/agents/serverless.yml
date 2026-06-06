@@ -9,7 +9,11 @@ provider:
   environment:
     DATABASE_URL: ${ssm:/threat-intel/DATABASE_URL}
     OPENAI_API_KEY: ${ssm:/threat-intel/OPENAI_API_KEY}
+    TI_SECRETS_KEY: ${ssm:/threat-intel/TI_SECRETS_KEY}
     NVD_API_KEY: ${ssm:/threat-intel/NVD_API_KEY}
+    GITHUB_TOKEN: ${ssm:/threat-intel/GITHUB_TOKEN}
+    MALWAREBAZAAR_API_KEY: ${ssm:/threat-intel/MALWAREBAZAAR_API_KEY}
+    ANYRUN_API_KEY: ${ssm:/threat-intel/ANYRUN_API_KEY}
   iam:
     role:
       statements:
@@ -89,6 +93,24 @@ functions:
           rate: cron(30 6 * * ? *)  # daily at 06:30 UTC
           enabled: true
           name: actor-profile-agent-schedule
+
+  navigatorAgent:
+    handler: src/handlers/navigator.handler
+    description: "Recomputes Navigator scenarios for Pro users"
+    events:
+      - schedule:
+          rate: cron(0 7 * * ? *)  # daily at 07:00 UTC
+          enabled: true
+          name: navigator-agent-schedule
+
+  customAgentRunner:
+    handler: src/handlers/custom.handler
+    description: "Runs user-defined agents (prompt + skill blocks) on a schedule"
+    events:
+      - schedule:
+          rate: rate(30 minutes)
+          enabled: true
+          name: custom-agent-runner-schedule
 
   mergeAgent:
     handler: src/handlers/merge.handler

@@ -279,7 +279,7 @@ async function seedFromMispGalaxy(params: { documentId: string }) {
         documentId: params.documentId,
         url: refUrl,
         publishedAt: null,
-        excerpt: obj.description ?? `MISP Galaxy maps ${actorId} â†’ ${iso2}`,
+        excerpt: obj.description ?? `MISP Galaxy maps ${actorId} → ${iso2}`,
         confidence,
       });
     }
@@ -297,7 +297,7 @@ export async function runOriginAgent() {
 
   const stixSource = await getStixSource();
   const mitreDocId = await ensureMitreDocument(stixSource?.url ?? DEFAULT_STIX_SOURCE.url);
-  const mispDocId = await ensureDocument({ url: MISP_GALAXY_URL, title: "MISP Galaxy â€” Threat Actors" });
+  const mispDocId = await ensureDocument({ url: MISP_GALAXY_URL, title: "MISP Galaxy - Threat Actors" });
 
   const actors = await db
     .select({

@@ -1,0 +1,536 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Card, CardContent, CardHeader } from "../ui/Card";
+
+type Row = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  webhookUrl: string;
+  headers: Record<string, string> | null;
+  criteria: any;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+const AGENTS = ["vuln", "exploit", "attack", "ttp", "malware"] as const;
+const SEVERITIES = ["critical", "high", "medium", "low", "info"] as const;
+
+function fmtWhen(iso: string | null) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-US", { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+function safeMaskUrl(url: string) {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    return `${u.protocol}//${host}${u.pathname}${u.search ? "?…" : ""}`;
+  } catch {
+    return url ? "Invalid URL" : "";
+  }
+}
+
+function parseHeaderLines(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const idx = line.indexOf(":");
+    if (idx <= 0) continue;
+    const k = line.slice(0, idx).trim();
+    const v = line.slice(idx + 1).trim();
+    if (!k || !v) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+function formatHeaderLines(headers: Record<string, string> | null | undefined) {
+  if (!headers) return "";
+  return Object.entries(headers)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join("\n");
+}
+
+export function SoarWebhookConnections({ rows }: { rows: Row[] }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<"connections" | "payload">("connections");
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const defaults = useMemo(() => {
+    return {
+      name: "Findings → SOAR",
+      webhookUrl: "",
+      enabled: true,
+      headers: "",
+      agents: ["vuln", "exploit"],
+      severities: ["critical", "high"],
+      minCvss: 7,
+      requireCve: true,
+      requireKev: false,
+      tagsAny: "",
+      tagsAll: "",
+    };
+  }, []);
+
+  const [form, setForm] = useState(() => ({ ...defaults }));
+
+  const resetForm = () => {
+    setEditingId(null);
+    setError(null);
+    setForm({ ...defaults });
+  };
+
+  const criteriaPayload = () => {
+    return {
+      agents: form.agents,
+      severities: form.severities,
+      minCvss: form.minCvss,
+      requireCve: form.requireCve,
+      requireKev: form.requireKev,
+      tagsAny: form.tagsAny.trim() ? form.tagsAny : undefined,
+      tagsAll: form.tagsAll.trim() ? form.tagsAll : undefined,
+    };
+  };
+
+  const headersPayload = () => parseHeaderLines(form.headers);
+
+  const startEdit = (r: Row) => {
+    if (editingId && editingId !== r.id) {
+      if (!confirm("Discard unsaved changes and edit a different connection?")) return;
+    }
+    const c = (r.criteria ?? {}) as any;
+    setTab("connections");
+    setEditingId(r.id);
+    setError(null);
+    setForm({
+      name: r.name ?? "",
+      webhookUrl: r.webhookUrl ?? "",
+      enabled: !!r.enabled,
+      headers: formatHeaderLines(r.headers),
+      agents: Array.isArray(c.agents) ? c.agents.map(String) : [],
+      severities: Array.isArray(c.severities) ? c.severities.map(String) : [],
+      minCvss: typeof c.minCvss === "number" ? c.minCvss : defaults.minCvss,
+      requireCve: Boolean(c.requireCve),
+      requireKev: Boolean(c.requireKev),
+      tagsAny: Array.isArray(c.tagsAny) ? c.tagsAny.join(", ") : typeof c.tagsAny === "string" ? c.tagsAny : "",
+      tagsAll: Array.isArray(c.tagsAll) ? c.tagsAll.join(", ") : typeof c.tagsAll === "string" ? c.tagsAll : "",
+    });
+  };
+
+  const create = async () => {
+    setBusy("create");
+    setError(null);
+    try {
+      const res = await fetch("/api/integrations/soar-webhooks", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          webhookUrl: form.webhookUrl,
+          enabled: form.enabled,
+          headers: headersPayload(),
+          criteria: criteriaPayload(),
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? `Request failed (${res.status})`);
+      resetForm();
+      router.refresh();
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create connection");
+      return false;
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const update = async (id: string, patch: any) => {
+    setBusy(`upd:${id}`);
+    setError(null);
+    try {
+      const res = await fetch(`/api/integrations/soar-webhooks/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? `Request failed (${res.status})`);
+      router.refresh();
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update connection");
+      return false;
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const del = async (id: string) => {
+    if (!confirm("Delete this SOAR webhook connection?")) return;
+    setBusy(`del:${id}`);
+    setError(null);
+    try {
+      const res = await fetch(`/api/integrations/soar-webhooks/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? `Request failed (${res.status})`);
+      if (editingId === id) resetForm();
+      router.refresh();
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete connection");
+      return false;
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const save = async () => {
+    if (!editingId) return;
+    const ok = await update(editingId, {
+      name: form.name,
+      webhookUrl: form.webhookUrl,
+      enabled: form.enabled,
+      headers: headersPayload(),
+      criteria: criteriaPayload(),
+    });
+    if (ok) resetForm();
+  };
+
+  return (
+    <div className="space-y-8">
+      <header className="space-y-2">
+        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">SOAR webhooks</h1>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          Send findings to your SOAR (Tines / XSOAR / Splunk SOAR / custom) via a generic outbound webhook.
+        </p>
+      </header>
+
+      <div className="inline-flex rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-black/20 p-1">
+        {[
+          ["connections", "Connections"],
+          ["payload", "Payload"],
+        ].map(([key, label]) => {
+          const active = tab === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key as any)}
+              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                active
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "text-zinc-700 dark:text-zinc-300 hover:bg-white/70 dark:hover:bg-black/30"
+              }`}
+              aria-pressed={active}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {error ? (
+        <div className="rounded-xl border border-rose-200/70 dark:border-rose-900/50 bg-rose-50/80 dark:bg-rose-950/30 px-4 py-3 text-sm text-rose-700 dark:text-rose-200">
+          {error}
+        </div>
+      ) : null}
+
+      {tab === "connections" ? (
+        <>
+          <Card>
+            <CardHeader
+              title={editingId ? "Edit connection" : "Create connection"}
+              description={
+                editingId ? "Update the webhook URL, headers, and criteria, then save changes." : "Paste a webhook URL, optional headers, and set your criteria."
+              }
+            />
+            <CardContent>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-2">
+                    <label className="text-xs text-zinc-600 dark:text-zinc-400">Name</label>
+                    <input
+                      className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-black/30 px-3 py-2 text-sm"
+                      value={form.name}
+                      onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    <label className="text-xs text-zinc-600 dark:text-zinc-400">Webhook URL</label>
+                    <input
+                      className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-black/30 px-3 py-2 text-sm"
+                      placeholder="https://soar.example/webhook/…"
+                      value={form.webhookUrl}
+                      onChange={(e) => setForm((s) => ({ ...s, webhookUrl: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    <label className="text-xs text-zinc-600 dark:text-zinc-400">
+                      Headers (optional) — one per line
+                    </label>
+                    <textarea
+                      rows={4}
+                      className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-black/30 px-3 py-2 text-sm font-mono"
+                      placeholder={"Authorization: Bearer …\nX-Webhook-Secret: …"}
+                      value={form.headers}
+                      onChange={(e) => setForm((s) => ({ ...s, headers: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <label className="inline-flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                      <input
+                        type="checkbox"
+                        checked={form.enabled}
+                        onChange={(e) => setForm((s) => ({ ...s, enabled: e.target.checked }))}
+                      />
+                      Enabled
+                    </label>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-2">
+                    <label className="text-xs text-zinc-600 dark:text-zinc-400">Agents</label>
+                    <div className="flex flex-wrap gap-2">
+                      {AGENTS.map((a) => (
+                        <label key={a} className="inline-flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                          <input
+                            type="checkbox"
+                            checked={form.agents.includes(a)}
+                            onChange={(e) =>
+                              setForm((s) => ({
+                                ...s,
+                                agents: e.target.checked ? [...s.agents, a] : s.agents.filter((x) => x !== a),
+                              }))
+                            }
+                          />
+                          {a}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    <label className="text-xs text-zinc-600 dark:text-zinc-400">Severities</label>
+                    <div className="flex flex-wrap gap-2">
+                      {SEVERITIES.map((s) => (
+                        <label key={s} className="inline-flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                          <input
+                            type="checkbox"
+                            checked={form.severities.includes(s)}
+                            onChange={(e) =>
+                              setForm((st) => ({
+                                ...st,
+                                severities: e.target.checked ? [...st.severities, s] : st.severities.filter((x) => x !== s),
+                              }))
+                            }
+                          />
+                          {s}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-2">
+                      <label className="text-xs text-zinc-600 dark:text-zinc-400">Min CVSS</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={10}
+                        step={0.1}
+                        className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-black/30 px-3 py-2 text-sm"
+                        value={form.minCvss}
+                        onChange={(e) => setForm((s) => ({ ...s, minCvss: Number(e.target.value) }))}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 gap-2">
+                      <label className="text-xs text-zinc-600 dark:text-zinc-400">Requirements</label>
+                      <div className="flex flex-col gap-2">
+                        <label className="inline-flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                          <input
+                            type="checkbox"
+                            checked={form.requireCve}
+                            onChange={(e) => setForm((s) => ({ ...s, requireCve: e.target.checked }))}
+                          />
+                          CVE only
+                        </label>
+                        <label className="inline-flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                          <input
+                            type="checkbox"
+                            checked={form.requireKev}
+                            onChange={(e) => setForm((s) => ({ ...s, requireKev: e.target.checked }))}
+                          />
+                          KEV / actively exploited
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-2">
+                      <label className="text-xs text-zinc-600 dark:text-zinc-400">Tags (any) — comma-separated</label>
+                      <input
+                        className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-black/30 px-3 py-2 text-sm"
+                        placeholder="windows, exchange, fortinet"
+                        value={form.tagsAny}
+                        onChange={(e) => setForm((s) => ({ ...s, tagsAny: e.target.value }))}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 gap-2">
+                      <label className="text-xs text-zinc-600 dark:text-zinc-400">Tags (all) — comma-separated</label>
+                      <input
+                        className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-black/30 px-3 py-2 text-sm"
+                        placeholder="vpn, edge"
+                        value={form.tagsAll}
+                        onChange={(e) => setForm((s) => ({ ...s, tagsAll: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      disabled={!!busy}
+                      onClick={editingId ? save : create}
+                      className="inline-flex rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 px-4 py-2 text-sm font-medium hover:opacity-95 disabled:opacity-60"
+                    >
+                      {editingId
+                        ? busy === `upd:${editingId}`
+                          ? "Saving…"
+                          : "Save changes"
+                        : busy === "create"
+                          ? "Creating…"
+                          : "Create connection"}
+                    </button>
+
+                    {editingId ? (
+                      <button
+                        type="button"
+                        disabled={!!busy}
+                        onClick={resetForm}
+                        className="inline-flex rounded-lg border border-zinc-200 dark:border-zinc-800 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-60"
+                      >
+                        Cancel
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader title="Existing connections" description="Edit, toggle on/off, or delete connections." />
+            <CardContent>
+              {rows.length ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="text-xs text-zinc-600 dark:text-zinc-400">
+                      <tr>
+                        <th className="py-2 text-left font-medium pr-4">Enabled</th>
+                        <th className="py-2 text-left font-medium pr-4">Name</th>
+                        <th className="py-2 text-left font-medium pr-4">Webhook</th>
+                        <th className="py-2 text-left font-medium pr-4">Updated</th>
+                        <th className="py-2 text-left font-medium pr-4">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-200/70 dark:divide-zinc-800/80">
+                      {rows.map((r) => (
+                        <tr key={r.id} className="align-top">
+                          <td className="py-3 pr-4 whitespace-nowrap">
+                            <input
+                              type="checkbox"
+                              checked={r.enabled}
+                              disabled={busy === `upd:${r.id}`}
+                              onChange={(e) => update(r.id, { enabled: e.target.checked })}
+                            />
+                          </td>
+                          <td className="py-3 pr-4 whitespace-nowrap text-zinc-900 dark:text-zinc-100">{r.name}</td>
+                          <td className="py-3 pr-4 min-w-[360px] text-xs text-zinc-600 dark:text-zinc-400">
+                            <span className="font-mono">{safeMaskUrl(r.webhookUrl)}</span>
+                            {r.headers && Object.keys(r.headers).length ? (
+                              <div className="mt-1 text-[11px] text-zinc-500">
+                                Headers: {Object.keys(r.headers).slice(0, 4).join(", ")}
+                                {Object.keys(r.headers).length > 4 ? "…" : ""}
+                              </div>
+                            ) : null}
+                          </td>
+                          <td className="py-3 pr-4 whitespace-nowrap text-xs text-zinc-600 dark:text-zinc-400">
+                            {fmtWhen(r.updatedAt ?? r.createdAt)}
+                          </td>
+                          <td className="py-3 pr-4 whitespace-nowrap">
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                className="text-sm text-zinc-700 dark:text-zinc-200 hover:underline disabled:opacity-60"
+                                disabled={!!busy || editingId === r.id}
+                                onClick={() => startEdit(r)}
+                              >
+                                {editingId === r.id ? "Editing" : "Edit"}
+                              </button>
+
+                              <button
+                                type="button"
+                                className="text-sm text-rose-600 dark:text-rose-400 hover:underline disabled:opacity-60"
+                                disabled={busy === `del:${r.id}`}
+                                onClick={() => del(r.id)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-sm text-zinc-600 dark:text-zinc-400">No SOAR webhook connections yet.</div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      ) : (
+        <Card>
+          <CardHeader title="Payload" description="JSON posted to your webhook." />
+          <CardContent>
+            <div className="space-y-3 text-sm text-zinc-700 dark:text-zinc-300">
+              <p className="text-zinc-600 dark:text-zinc-400">
+                The app posts a JSON body like the following (fields may be null depending on the finding):
+              </p>
+              <pre className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-black/20 p-3 text-xs overflow-auto">{`{
+  "finding": {
+    "id": "…",
+    "agent": "vuln",
+    "title": "…",
+    "summary": "…",
+    "severity": "critical",
+    "cveId": "CVE-…",
+    "cvss": { "score": 9.8, "vector": "…" },
+    "tags": ["kev", "windows"],
+    "source": { "url": "https://…", "title": "…" },
+    "poc": { "url": "https://…", "level": "itw" },
+    "publishedAt": "2026-…",
+    "createdAt": "2026-…",
+    "url": "https://…/findings/…"
+  },
+  "actionItems": [],
+  "sentAt": "2026-…"
+}`}</pre>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+

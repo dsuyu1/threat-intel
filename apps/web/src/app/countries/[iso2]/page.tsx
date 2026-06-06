@@ -119,9 +119,9 @@ async function getActorRowsForCountryActorIds(actorIds: string[], originIso2: st
       actorId: kgEntities.entityId,
       name: kgEntities.name,
       lastSeen: sql<string | Date | null>`max(${kgRelations.lastSeen})`,
-      ttpCount: sql<number>`count(distinct case when ${kgRelations.type} = 'actor_uses_technique' then ${kgRelations.toId} end)`,
-      sectorCount: sql<number>`count(distinct case when ${kgRelations.type} = 'actor_targets_sector' then ${kgRelations.toId} end)`,
-      cveCount: sql<number>`count(distinct case when ${kgRelations.type} = 'actor_exploits_cve' then ${kgRelations.toId} end)`,
+      ttpCount: sql<number>`count(distinct case when ${kgRelations.type} = 'actor_uses_technique' and ${kgRelations.toKind} = 'technique' then ${kgRelations.toId} end)`,
+      sectorCount: sql<number>`count(distinct case when ${kgRelations.type} = 'actor_targets_sector' and ${kgRelations.toKind} = 'sector' then ${kgRelations.toId} end)`,
+      cveCount: sql<number>`count(distinct case when ${kgRelations.type} = 'actor_exploits_cve' and ${kgRelations.toKind} = 'cve' then ${kgRelations.toId} end)`,
     })
     .from(kgEntities)
     .leftJoin(

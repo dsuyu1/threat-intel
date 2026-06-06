@@ -11,6 +11,7 @@ import crypto from "node:crypto";
 import { getDb, findings, kgEntities } from "@ti/db";
 import { sql } from "drizzle-orm";
 import { summarizeVuln } from "../lib/ai.js";
+import { dispatchJiraAutomationForFindingId } from "../lib/jira-automation.js";
 
 // ─── NVD Types ────────────────────────────────────────────────────────────────
 
@@ -253,7 +254,7 @@ export async function runVulnAgent() {
 
     // Upsert (ignore on conflict — dedup_hash is unique)
     try {
-      await db
+      const res = await db
         .insert(findings)
         .values({
           agent: "vuln",
@@ -270,8 +271,15 @@ export async function runVulnAgent() {
           dedupHash: hash,
           publishedAt: new Date(cve.published),
         })
-        .onConflictDoNothing();
-      inserted++;
+        .onConflictDoNothing()
+        .returning({ id: findings.id });
+
+      if (res.length) {
+        inserted++;
+        await dispatchJiraAutomationForFindingId(db as any, res[0]!.id);
+      } else {
+        skipped++;
+      }
     } catch {
       skipped++;
     }

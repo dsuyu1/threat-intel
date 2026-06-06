@@ -16,9 +16,11 @@ import * as topojson from "topojson-client";
 import type { Feature, FeatureCollection, MultiPolygon, Polygon } from "geojson";
 
 import type { CountryActorSummary, CountryHeat } from "../lib/country-heat";
+import type { GlobalNewsItem } from "../lib/global-news";
 import { isoNumericToIso2, isoNumericToRgb, rgbToIsoNumeric } from "../lib/iso-numeric";
 import { OrbitLoader } from "./OrbitLoader";
 import { ActorIcon } from "./ui/ActorIcon";
+import { GlobalNewsTray } from "./GlobalNewsTray";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -43,8 +45,9 @@ const OCEAN_GRID_STROKE_STYLE = "rgba(82,82,91,0.18)";
 
 const ACTOR_LIST_MAX_VISIBLE_ROWS = 10;
 const ACTOR_ROW_HEIGHT_PX = 56;
-const SIDEBAR_HANDLE_W = 36;
-const SIDEBAR_MARGIN_PX = 16; // Tailwind `left-4` / `top-4`
+const ACTOR_LIST_FADE_TOP_PX = 18;
+const ACTOR_LIST_FADE_BOTTOM_PX = 28;
+// Sidebar is toggled via an info button in the top-left.
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -376,6 +379,8 @@ function formatHeat(v: number) {
 
 interface Props {
   countryHeat: CountryHeat[];
+  newsItems?: GlobalNewsItem[];
+  newsSchemaReady?: boolean;
 }
 
 type DrawerState = {
@@ -519,7 +524,11 @@ function InfoTip({
   );
 }
 
-export function GlobeHero({ countryHeat }: Props) {
+export function GlobeHero({
+  countryHeat,
+  newsItems = [],
+  newsSchemaReady = true,
+}: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const mountRef = useRef<HTMLDivElement>(null);
   const flatCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -1344,17 +1353,30 @@ export function GlobeHero({ countryHeat }: Props) {
   }, []);
 
   const clampDrawerRect = useCallback((rect: DrawerRect): DrawerRect => {
-    const margin = 10;
-    const minW = 360;
-    const minH = 480;
+    // Drawer coordinates are *local to the globe root container* (not window).
+    // This prevents the right panel from being positioned off-screen when the app has
+    // a left sidebar (LG) or other layout offsets.
+    const margin = 16; // Tailwind `*-4`
+    const desiredMinW = 360;
+    const desiredMinH = 480;
 
-    const maxW = Math.max(minW, window.innerWidth - margin * 2);
-    const maxH = Math.max(minH, window.innerHeight - margin * 2);
+    const root = rootRef.current;
+    const boundsW = root?.clientWidth ?? window.innerWidth;
+    const boundsH = root?.clientHeight ?? window.innerHeight;
+
+    const maxW = Math.max(0, boundsW - margin * 2);
+    const maxH = Math.max(0, boundsH - margin * 2);
+
+    const minW = Math.min(desiredMinW, maxW);
+    const minH = Math.min(desiredMinH, maxH);
 
     const w = clamp(rect.w, minW, maxW);
     const h = clamp(rect.h, minH, maxH);
-    const x = clamp(rect.x, margin, window.innerWidth - w - margin);
-    const y = clamp(rect.y, margin, window.innerHeight - h - margin);
+
+    const xMax = Math.max(margin, boundsW - w - margin);
+    const yMax = Math.max(margin, boundsH - h - margin);
+    const x = clamp(rect.x, margin, xMax);
+    const y = clamp(rect.y, margin, yMax);
 
     return { x, y, w, h };
   }, []);
@@ -1370,13 +1392,29 @@ export function GlobeHero({ countryHeat }: Props) {
     };
   }, [clampDrawerRect]);
 
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      setDrawerRect((cur) => (cur ? clampDrawerRect(cur) : cur));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [clampDrawerRect]);
+
   const onDrawerMoveStart = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
       if (e.button !== 0) return;
       let rect = drawerRectRef.current;
       if (!rect && drawerRootRef.current) {
         const r = drawerRootRef.current.getBoundingClientRect();
-        rect = clampDrawerRect({ x: r.left, y: r.top, w: r.width, h: r.height });
+        const rootRect = rootRef.current?.getBoundingClientRect();
+        rect = clampDrawerRect({
+          x: r.left - (rootRect?.left ?? 0),
+          y: r.top - (rootRect?.top ?? 0),
+          w: r.width,
+          h: r.height,
+        });
         setDrawerRect(rect);
       }
       if (!rect) return;
@@ -1402,7 +1440,13 @@ export function GlobeHero({ countryHeat }: Props) {
       let rect = drawerRectRef.current;
       if (!rect && drawerRootRef.current) {
         const r = drawerRootRef.current.getBoundingClientRect();
-        rect = clampDrawerRect({ x: r.left, y: r.top, w: r.width, h: r.height });
+        const rootRect = rootRef.current?.getBoundingClientRect();
+        rect = clampDrawerRect({
+          x: r.left - (rootRect?.left ?? 0),
+          y: r.top - (rootRect?.top ?? 0),
+          w: r.width,
+          h: r.height,
+        });
         setDrawerRect(rect);
       }
       if (!rect) return;
@@ -1474,10 +1518,13 @@ export function GlobeHero({ countryHeat }: Props) {
 
       // Always spawn on the right (default) when selecting a country.
       const defaultW = 480;
-      const defaultH = Math.min(Math.round(window.innerHeight * 0.82), 760);
+      const rootRect = rootRef.current?.getBoundingClientRect();
+      const boundsW = rootRect?.width ?? window.innerWidth;
+      const boundsH = rootRect?.height ?? window.innerHeight;
+      const defaultH = Math.min(Math.round(boundsH * 0.82), 760);
       const margin = 16; // Tailwind `*-4`
       const nextRect = clampDrawerRect({
-        x: window.innerWidth - defaultW - margin,
+        x: boundsW - defaultW - margin,
         y: margin,
         w: defaultW,
         h: defaultH,
@@ -1694,18 +1741,23 @@ export function GlobeHero({ countryHeat }: Props) {
         className="absolute z-20 left-4 top-4 max-w-[calc(100%-2rem)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div
-          className="relative transition-transform duration-300 ease-out will-change-transform"
-          style={{
-            transform: sidebarOpen
-              ? "translateX(0px)"
-              : `translateX(calc(-100% + ${SIDEBAR_HANDLE_W}px - ${SIDEBAR_MARGIN_PX}px))`,
-          }}
-        >
-          <aside
-            className="relative w-[360px] max-w-[calc(100vw-2rem)] max-h-[82vh] bg-white/90 dark:bg-zinc-950/70 backdrop-blur border border-zinc-200 dark:border-zinc-800/70 rounded-2xl shadow-2xl shadow-black/10 dark:shadow-black/60 px-5 py-5 pr-12 overflow-auto no-scrollbar"
-          >
-            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">How this heatmap works</h1>
+        {sidebarOpen ? (
+          <aside className="relative w-[360px] max-w-[calc(100vw-2rem)] max-h-[82vh] bg-white/90 dark:bg-zinc-950/70 backdrop-blur border border-zinc-200 dark:border-zinc-800/70 rounded-2xl shadow-2xl shadow-black/10 dark:shadow-black/60 px-5 py-5 overflow-auto no-scrollbar">
+            <div className="flex items-start justify-between gap-4">
+              <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                How this heatmap works
+              </h1>
+              <button
+                type="button"
+                className="shrink-0 h-7 w-7 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-black/30 backdrop-blur flex items-center justify-center text-zinc-700 hover:text-zinc-900 dark:text-zinc-200 dark:hover:text-white transition-colors"
+                aria-label="Hide map info"
+                onClick={() => setSidebarOpen(false)}
+              >
+                <span aria-hidden="true" className="text-xs font-semibold leading-none">
+                  i
+                </span>
+              </button>
+            </div>
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
               Countries shade red based on how strongly threat actors are attributed as originating from that
               country. Click a country to see the top actors and drill into evidence.
@@ -1731,12 +1783,12 @@ export function GlobeHero({ countryHeat }: Props) {
                   and older observations decay over time so recently-seen evidence weighs more.
                 </div>
               </div>
-              <div>
-                <div className="text-zinc-900 dark:text-zinc-200 font-medium">Last</div>
-                <div className="mt-1">
-                  Most recent time any origin attribution for that country was updated.
-                </div>
-              </div>
+	              <div>
+	                <div className="text-zinc-900 dark:text-zinc-200 font-medium">Last seen</div>
+	                <div className="mt-1">
+	                  Most recent time any origin attribution for that country was updated.
+	                </div>
+	              </div>
               <div>
                 <div className="text-zinc-900 dark:text-zinc-200 font-medium">Confidence</div>
                 <div className="mt-1">
@@ -1828,17 +1880,18 @@ export function GlobeHero({ countryHeat }: Props) {
               </div>
             </div>
           </aside>
+        ) : (
           <button
             type="button"
-            className="absolute right-0 top-1/2 -translate-y-1/2 h-10 w-9 flex items-center justify-center text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white transition-colors"
-            aria-label={sidebarOpen ? "Hide map info" : "Show map info"}
-            onClick={() => setSidebarOpen((v) => !v)}
+            className="h-8 w-8 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/70 backdrop-blur shadow-2xl shadow-black/10 dark:shadow-black/60 flex items-center justify-center text-zinc-700 hover:text-zinc-900 dark:text-zinc-200 dark:hover:text-white transition-colors"
+            aria-label="Show map info"
+            onClick={() => setSidebarOpen(true)}
           >
-            <span aria-hidden="true" className="text-xl leading-none">
-              {sidebarOpen ? "\u2190" : "\u2192"}
+            <span aria-hidden="true" className="text-xs font-semibold leading-none">
+              i
             </span>
           </button>
-        </div>
+        )}
       </div>
 
       <div
@@ -1988,19 +2041,24 @@ export function GlobeHero({ countryHeat }: Props) {
               <p className="text-sm text-red-400">{drawer.error}</p>
             ) : drawer.actors?.length ? (
               <div className="relative h-full min-h-0">
-                <ul
-                  ref={actorListRef}
-                  className="h-full min-h-0 overflow-y-auto pr-1"
-                  onScroll={onActorListScroll}
-                  style={{
-                    height: drawerUserResized ? undefined : drawerVisibleRows * ACTOR_ROW_HEIGHT_PX,
-                    minHeight: drawerVisibleRows * ACTOR_ROW_HEIGHT_PX,
-                    maskImage:
-                      "linear-gradient(to bottom, transparent, black 18px, black calc(100% - 28px), transparent)",
-                    WebkitMaskImage:
-                      "linear-gradient(to bottom, transparent, black 18px, black calc(100% - 28px), transparent)",
-                  }}
-                >
+	                <ul
+	                  ref={actorListRef}
+	                  className="h-full min-h-0 overflow-y-auto pr-1"
+	                  onScroll={onActorListScroll}
+	                  style={{
+	                    height: drawerUserResized
+	                      ? undefined
+	                      : drawerVisibleRows * ACTOR_ROW_HEIGHT_PX + ACTOR_LIST_FADE_TOP_PX + ACTOR_LIST_FADE_BOTTOM_PX,
+	                    minHeight:
+	                      drawerVisibleRows * ACTOR_ROW_HEIGHT_PX + ACTOR_LIST_FADE_TOP_PX + ACTOR_LIST_FADE_BOTTOM_PX,
+	                    paddingTop: ACTOR_LIST_FADE_TOP_PX,
+	                    paddingBottom: ACTOR_LIST_FADE_BOTTOM_PX,
+	                    maskImage:
+	                      `linear-gradient(to bottom, transparent, black ${ACTOR_LIST_FADE_TOP_PX}px, black calc(100% - ${ACTOR_LIST_FADE_BOTTOM_PX}px), transparent)`,
+	                    WebkitMaskImage:
+	                      `linear-gradient(to bottom, transparent, black ${ACTOR_LIST_FADE_TOP_PX}px, black calc(100% - ${ACTOR_LIST_FADE_BOTTOM_PX}px), transparent)`,
+	                  }}
+	                >
                     {(drawerLoopedActors ?? drawer.actors).map((a, idx) => {
                       const baseLen = drawer.actors?.length ?? 0;
                       const logicalIndex = baseLen ? idx % baseLen : idx;
@@ -2089,6 +2147,8 @@ export function GlobeHero({ countryHeat }: Props) {
           </div>
         </div>
       ) : null}
+
+      <GlobalNewsTray items={newsItems} schemaReady={newsSchemaReady} />
     </div>
   );
 }

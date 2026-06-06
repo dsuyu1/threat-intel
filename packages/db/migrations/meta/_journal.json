@@ -15,6 +15,104 @@
       "when": 1780461292828,
       "tag": "0001_hesitant_starfox",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1780704696878,
+      "tag": "0002_stale_maestro",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1780732684212,
+      "tag": "0003_agent_management",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1780734179235,
+      "tag": "0004_jira_automation",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1780770043039,
+      "tag": "0005_navigator_detections",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1780775522335,
+      "tag": "0006_slack_soar_connections",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1780776719473,
+      "tag": "0007_discord_webhook_connections",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1780777345239,
+      "tag": "0008_risk_register",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1780778099113,
+      "tag": "0009_risk_tolerance_profiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1780778802183,
+      "tag": "0010_fair_lite",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1780778957104,
+      "tag": "0011_compliance_mappings",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1780779549042,
+      "tag": "0012_splunk_connections",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1780780061418,
+      "tag": "0013_teams_projects",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1783897610000,
+      "tag": "0014_risk_project_scoping",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1783900000000,
+      "tag": "0015_user_ai_keys",
+      "breakpoints": true
     }
   ]
 }

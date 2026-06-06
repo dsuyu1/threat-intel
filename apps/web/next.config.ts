@@ -2,10 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@ti/db"],
-  // This is a monorepo (apps/* + packages/*). Allow Next to reference files outside `apps/web`,
-  // which also helps when pnpm resolves dependencies via the root `.pnpm` virtual store.
-  externalDir: true,
   experimental: {
+    // This is a monorepo (apps/* + packages/*). Allow Next to reference files outside `apps/web`,
+    // which also helps when pnpm resolves dependencies via the root `.pnpm` virtual store.
+    externalDir: true,
     // Work around occasional RSC/manifest inconsistencies in dev (especially on Windows + pnpm).
     serverComponentsHmrCache: false,
     // The DevTools segment explorer currently breaks Edge-runtime RSC manifests in Webpack dev.

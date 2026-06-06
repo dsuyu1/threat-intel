@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 type Project = { id: string; teamId: string; slug: string; name: string };
 
@@ -22,7 +22,6 @@ function safeErrorMessage(err: unknown) {
 
 export function ProjectSwitcher() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const router = useRouter();
 
   const pathProjectSlug = useMemo(() => parseProjectSlug(pathname), [pathname]);
@@ -79,7 +78,7 @@ export function ProjectSwitcher() {
       const body = (await res.json().catch(() => ({}))) as any;
       if (!res.ok) throw new Error(String(body?.error ?? `Request failed (${res.status})`));
 
-      const qs = searchParams.toString();
+      const qs = typeof window !== "undefined" ? window.location.search.replace(/^\?/, "") : "";
       const nextPath = (() => {
         if (pathname.startsWith("/p/")) {
           const parts = pathname.split("/");

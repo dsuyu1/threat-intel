@@ -131,6 +131,23 @@ export const agentRunStatusEnum = pgEnum("agent_run_status", [
   "skipped",
 ]);
 
+export const playbookStatusEnum = pgEnum("playbook_status", ["draft", "approved", "archived"]);
+
+export const playbookIncidentTypeEnum = pgEnum("playbook_incident_type", [
+  "vulnerability_exploitation",
+  "credential_compromise",
+  "ransomware",
+  "supply_chain",
+  "lateral_movement",
+  "data_exfiltration",
+]);
+
+export const playbookSourceKindEnum = pgEnum("playbook_source_kind", [
+  "manual",
+  "navigator_scenario",
+  "finding",
+]);
+
 // ─── Findings ─────────────────────────────────────────────────────────────────
 
 export const findings = pgTable(
@@ -1205,6 +1222,41 @@ export const complianceMappings = pgTable(
   })
 );
 
+export const playbooks = pgTable(
+  "playbooks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    createdByUserId: uuid("created_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sourceKind: playbookSourceKindEnum("source_kind").notNull().default("manual"),
+    sourceId: uuid("source_id"),
+    incidentType: playbookIncidentTypeEnum("incident_type").notNull(),
+    title: text("title").notNull(),
+    status: playbookStatusEnum("status").notNull().default("draft"),
+    contextJson: jsonb("context_json"),
+    contentJson: jsonb("content_json").notNull(),
+    approvedByUserId: uuid("approved_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    projectIdx: index("playbooks_project_id_idx").on(t.projectId),
+    statusIdx: index("playbooks_status_idx").on(t.status),
+    incidentTypeIdx: index("playbooks_incident_type_idx").on(t.incidentType),
+  })
+);
+
 export type Finding = typeof findings.$inferSelect;
 export type NewFinding = typeof findings.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -1233,6 +1285,7 @@ export type NavigatorDetection = typeof navigatorDetections.$inferSelect;
 export type RiskEntry = typeof riskEntries.$inferSelect;
 export type RiskToleranceProfile = typeof riskToleranceProfiles.$inferSelect;
 export type ComplianceMapping = typeof complianceMappings.$inferSelect;
+export type Playbook = typeof playbooks.$inferSelect;
 export type UserAiKey = typeof userAiKeys.$inferSelect;
 export type AgentSetting = typeof agentSettings.$inferSelect;
 export type CustomAgent = typeof customAgents.$inferSelect;

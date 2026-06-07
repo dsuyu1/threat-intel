@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Bot, Compass, Database, Globe, LayoutDashboard, Radar, ShieldAlert, ShieldCheck, Users, Webhook } from "lucide-react";
+import { Book, Bot, Compass, Database, Globe, LayoutDashboard, Radar, ShieldAlert, ShieldCheck, Users, Webhook } from "lucide-react";
 
 export type PlatformNavItem = {
   label: string;
@@ -33,6 +33,7 @@ export const PLATFORM_NAV_SECTIONS: PlatformNavSection[] = [
     items: [
       { label: "Risk register", href: "/risk", icon: ShieldAlert },
       { label: "Compliance", href: "/risk/compliance", icon: ShieldCheck },
+      { label: "Playbooks", href: "/playbooks", icon: Book },
       { label: "Agents", href: "/agents", icon: Bot },
       { label: "Connections", href: "/connections", icon: Webhook },
     ],

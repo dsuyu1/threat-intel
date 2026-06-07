@@ -148,6 +148,8 @@ export const playbookSourceKindEnum = pgEnum("playbook_source_kind", [
   "finding",
 ]);
 
+export const playbookContentFormatEnum = pgEnum("playbook_content_format", ["json", "yaml"]);
+
 // ─── Findings ─────────────────────────────────────────────────────────────────
 
 export const findings = pgTable(
@@ -1239,6 +1241,8 @@ export const playbooks = pgTable(
     status: playbookStatusEnum("status").notNull().default("draft"),
     contextJson: jsonb("context_json"),
     contentJson: jsonb("content_json").notNull(),
+    contentFormat: playbookContentFormatEnum("content_format").notNull().default("json"),
+    contentText: text("content_text"),
     approvedByUserId: uuid("approved_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),

@@ -22,6 +22,7 @@ function projectizeHref(href: string, projectSlug: string | null) {
   if (href === "/") return `/p/${projectSlug}`;
   if (href === "/navigator" || href.startsWith("/navigator/")) return `/p/${projectSlug}${href}`;
   if (href === "/risk" || href.startsWith("/risk/")) return `/p/${projectSlug}${href}`;
+  if (href === "/playbooks" || href.startsWith("/playbooks/")) return `/p/${projectSlug}${href}`;
   return href;
 }
 

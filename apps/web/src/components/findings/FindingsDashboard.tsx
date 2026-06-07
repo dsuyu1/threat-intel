@@ -511,10 +511,23 @@ export function FindingsDashboard({
 
   const visibleIds = useMemo(() => paged.map((r) => r.id), [paged]);
 
+  const filteredIds = useMemo(() => sorted.map((r) => r.id), [sorted]);
+
   const selectedRows = useMemo(() => {
     if (!checked.size) return [];
     return rows.filter((r) => checked.has(r.id));
   }, [rows, checked]);
+
+  const selectedMeta = useMemo(() => {
+    if (!checked.size) return { dismissed: 0, reviewed: 0 };
+    let dismissed = 0;
+    let reviewed = 0;
+    for (const id of checked) {
+      if (triageSets.dismissed.has(id)) dismissed += 1;
+      if (triageSets.reviewed.has(id)) reviewed += 1;
+    }
+    return { dismissed, reviewed };
+  }, [checked, triageSets.dismissed, triageSets.reviewed]);
 
   const currentParams: FindingsSearchParams = useMemo(() => {
     const p: FindingsSearchParams = {};
@@ -578,6 +591,14 @@ export function FindingsDashboard({
     });
   }, [visibleIds]);
 
+  const selectAllFiltered = useCallback(() => {
+    if (!filteredIds.length) return;
+    if (filteredIds.length > 200) {
+      if (!confirm(`Select all ${filteredIds.length} results?`)) return;
+    }
+    setChecked(new Set(filteredIds));
+  }, [filteredIds]);
+
   const markReviewed = () => {
     if (!triage || !checked.size) return;
     const reviewed = new Set(triage.reviewedIds);
@@ -589,6 +610,20 @@ export function FindingsDashboard({
     clearSelection();
   };
 
+  const unreview = () => {
+    if (!triage || !checked.size) return;
+    const reviewed = new Set(triage.reviewedIds);
+    let changed = 0;
+    for (const id of checked) {
+      if (reviewed.delete(id)) changed += 1;
+    }
+    const next = { ...triage, reviewedIds: Array.from(reviewed) };
+    setTriage(next);
+    saveTriage(next);
+    setToast(changed ? `Unreviewed: ${changed}` : "No reviewed items selected");
+    clearSelection();
+  };
+
   const dismiss = () => {
     if (!triage || !checked.size) return;
     const dismissed = new Set(triage.dismissedIds);
@@ -597,6 +632,20 @@ export function FindingsDashboard({
     setTriage(next);
     saveTriage(next);
     setToast(`Dismissed: ${checked.size}`);
+    clearSelection();
+  };
+
+  const undismiss = () => {
+    if (!triage || !checked.size) return;
+    const dismissed = new Set(triage.dismissedIds);
+    let changed = 0;
+    for (const id of checked) {
+      if (dismissed.delete(id)) changed += 1;
+    }
+    const next = { ...triage, dismissedIds: Array.from(dismissed) };
+    setTriage(next);
+    saveTriage(next);
+    setToast(changed ? `Restored: ${changed}` : "No dismissed items selected");
     clearSelection();
   };
 
@@ -1287,10 +1336,25 @@ export function FindingsDashboard({
                 </button>
                 <button
                   type="button"
+                  onClick={selectAllFiltered}
+                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
                   onClick={markReviewed}
                   className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900"
                 >
                   Mark reviewed
+                </button>
+                <button
+                  type="button"
+                  onClick={unreview}
+                  disabled={selectedMeta.reviewed === 0}
+                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
+                >
+                  Unreview
                 </button>
                 <button
                   type="button"
@@ -1340,6 +1404,14 @@ export function FindingsDashboard({
                   className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-rose-300 hover:bg-rose-950/30"
                 >
                   Dismiss
+                </button>
+                <button
+                  type="button"
+                  onClick={undismiss}
+                  disabled={selectedMeta.dismissed === 0}
+                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
+                >
+                  Restore
                 </button>
                 <button type="button" onClick={clearSelection} className="text-xs text-zinc-500 hover:text-zinc-300 px-2 py-1">
                   Clear

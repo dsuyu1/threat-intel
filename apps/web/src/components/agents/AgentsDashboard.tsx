@@ -72,6 +72,7 @@ export function AgentsDashboard(props: {
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState(props.aiKey.baseUrl ?? "");
   const [keyStatus, setKeyStatus] = useState<string | null>(props.aiKey.error ?? null);
+  const [runStatus, setRunStatus] = useState<string | null>(null);
 
   const systemEnabledCount = useMemo(
     () => props.systemAgents.filter((a) => a.enabled).length,
@@ -115,6 +116,46 @@ export function AgentsDashboard(props: {
       const res = await fetch(`/api/agents/custom/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? `Request failed (${res.status})`);
       router.refresh();
+    } finally {
+      setBusyKey("");
+    }
+  };
+
+  const runSystemNow = async (agentKey: string) => {
+    setBusyKey(`run:sys:${agentKey}`);
+    setRunStatus(null);
+    try {
+      const res = await fetch("/api/agents/run", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind: "system", agentKey }),
+      });
+      const data = (await res.json().catch(() => ({}))) as any;
+      if (!res.ok) throw new Error(String(data?.error ?? `Request failed (${res.status})`));
+      setRunStatus("Run started. Refreshingâ€¦");
+      router.refresh();
+    } catch (err) {
+      setRunStatus(String((err as any)?.message ?? err));
+    } finally {
+      setBusyKey("");
+    }
+  };
+
+  const runCustomNow = async (customAgentId: string) => {
+    setBusyKey(`run:custom:${customAgentId}`);
+    setRunStatus(null);
+    try {
+      const res = await fetch("/api/agents/run", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind: "custom", customAgentId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as any;
+      if (!res.ok) throw new Error(String(data?.error ?? `Request failed (${res.status})`));
+      setRunStatus("Run started. Refreshingâ€¦");
+      router.refresh();
+    } catch (err) {
+      setRunStatus(String((err as any)?.message ?? err));
     } finally {
       setBusyKey("");
     }
@@ -282,6 +323,7 @@ export function AgentsDashboard(props: {
                 <th className="py-2 pr-4 text-left font-medium">Last run</th>
                 <th className="py-2 pr-4 text-left font-medium">Status</th>
                 <th className="py-2 pr-4 text-left font-medium">Output</th>
+                <th className="py-2 pr-4 text-left font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200/70 dark:divide-zinc-800/80">
@@ -331,6 +373,26 @@ export function AgentsDashboard(props: {
                             .join(" · ")}
                         </div>
                       ) : null}
+                    </td>
+                    <td className="py-3 pr-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void runSystemNow(a.key)}
+                          disabled={busyKey === `run:sys:${a.key}`}
+                          className="rounded-md border border-zinc-200 dark:border-zinc-800 px-2 py-1 text-xs hover:bg-white dark:hover:bg-black/40 disabled:opacity-60"
+                        >
+                          {busyKey === `run:sys:${a.key}` ? "Starting..." : "Run now"}
+                        </button>
+                        <a
+                          href={`/agents/runs/${r?.id ?? ""}`}
+                          className={`rounded-md border border-zinc-200 dark:border-zinc-800 px-2 py-1 text-xs hover:bg-white dark:hover:bg-black/40 ${
+                            r?.id ? "" : "pointer-events-none opacity-50"
+                          }`}
+                        >
+                          view run
+                        </a>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -387,6 +449,14 @@ export function AgentsDashboard(props: {
                     >
                       {a.enabled ? "enabled" : "disabled"}
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => void runCustomNow(a.id)}
+                      disabled={busyKey === `run:custom:${a.id}`}
+                      className="rounded-md border border-zinc-200 dark:border-zinc-800 px-2 py-1 text-xs hover:bg-white dark:hover:bg-black/40 disabled:opacity-60"
+                    >
+                      {busyKey === `run:custom:${a.id}` ? "Starting..." : "Run now"}
+                    </button>
                     <a
                       href={`/agents/runs/${r?.id ?? ""}`}
                       className={`rounded-md border border-zinc-200 dark:border-zinc-800 px-2 py-1 text-xs hover:bg-white dark:hover:bg-black/40 ${
@@ -414,6 +484,12 @@ export function AgentsDashboard(props: {
           ) : null}
         </div>
       </section>
+
+      {runStatus ? (
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-black/30 px-4 py-3 text-sm text-zinc-700 dark:text-zinc-200">
+          {runStatus}
+        </div>
+      ) : null}
 
       <section className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-black/20 p-5">
         <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Recent activity</div>

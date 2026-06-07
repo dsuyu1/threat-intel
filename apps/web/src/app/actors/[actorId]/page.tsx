@@ -4,7 +4,6 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  actorNeighbors,
   getDb,
   kgEntities,
   kgEvidence,
@@ -15,7 +14,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { Pentagraph } from "../../../components/Pentagraph";
 import { EvidenceDetails } from "../../../components/EvidenceDetails";
 import { SectorWheel } from "../../../components/SectorWheel";
-import { SimilaritySpokes } from "../../../components/SimilaritySpokes";
+import { ActorRelationshipGraph } from "../../../components/ActorRelationshipGraph";
 import { Markdown } from "../../../components/ui/Markdown";
 import { InfoTip } from "../../../components/ui/InfoTip";
 import { ActorIcon } from "../../../components/ui/ActorIcon";
@@ -146,6 +145,17 @@ async function getActor(actorId: string) {
     .where(and(eq(kgEntities.kind, "actor"), eq(kgEntities.entityId, actorId)))
     .limit(1);
   return actor ?? null;
+}
+
+async function getActorOptions(limit = 250) {
+  const db = getDb();
+  const rows = await db
+    .select({ actorId: kgEntities.entityId, name: kgEntities.name })
+    .from(kgEntities)
+    .where(eq(kgEntities.kind, "actor"))
+    .orderBy(asc(kgEntities.name))
+    .limit(limit);
+  return rows.map((r) => ({ actorId: r.actorId, name: r.name }));
 }
 
 async function getTopRelations(params: {
@@ -366,37 +376,6 @@ async function getAllMitigationsForActor(actorId: string) {
   }));
 }
 
-async function getNeighbors(actorId: string) {
-  const db = getDb();
-  const rows = await db
-    .select({
-      neighborActorId: actorNeighbors.neighborActorId,
-      distance: actorNeighbors.distance,
-      whyJson: actorNeighbors.whyJson,
-    })
-    .from(actorNeighbors)
-    .where(eq(actorNeighbors.actorId, actorId))
-    .orderBy(actorNeighbors.distance)
-    .limit(12);
-
-  const neighborIds = rows.map((r) => r.neighborActorId);
-  const names =
-    neighborIds.length > 0
-      ? await db
-          .select({ id: kgEntities.entityId, name: kgEntities.name })
-          .from(kgEntities)
-          .where(and(eq(kgEntities.kind, "actor"), inArray(kgEntities.entityId, neighborIds)))
-      : [];
-  const nameById = new Map(names.map((n) => [n.id, n.name]));
-
-  return rows.map((r) => ({
-    actorId: r.neighborActorId,
-    name: nameById.get(r.neighborActorId) ?? r.neighborActorId,
-    distance: r.distance,
-    why: (r.whyJson ?? null) as unknown,
-  }));
-}
-
 function formatShownOfTotal(shown: number, total: number | null | undefined) {
   const tRaw = Number(total);
   if (!Number.isFinite(tRaw)) return String(shown);
@@ -437,10 +416,10 @@ export default async function ActorPage({
     techniques,
     cves,
     campaigns,
-    neighbors,
     facetCounts,
     mitigationsTop,
     mitigationsAll,
+    actorOptions,
   ] = await Promise.all([
     getTopRelations({ actorId, type: "actor_origin_country", toKind: "country", limit: 3 }),
     getTopRelations({ actorId, type: "actor_targets_sector", toKind: "sector", limit: 10 }),
@@ -448,10 +427,10 @@ export default async function ActorPage({
     getTopRelations({ actorId, type: "actor_uses_technique", toKind: "technique", limit: 12 }),
     getTopRelations({ actorId, type: "actor_exploits_cve", toKind: "cve", limit: 12 }),
     getTopRelations({ actorId, type: "actor_attributed_campaign", toKind: "campaign", limit: 20 }),
-    getNeighbors(actorId),
     getActorFacetCounts(actorId),
     getTopMitigationsForActor(actorId),
     getAllMitigationsForActor(actorId),
+    getActorOptions(),
   ]);
 
   const sumSupport = (items: Array<{ support: number }>) =>
@@ -815,12 +794,17 @@ export default async function ActorPage({
           </div>
         </div>
 
-        <div className="space-y-10">
-          <section>
-            <SimilaritySpokes center={{ actorId: actor.entityId, name: actor.name }} neighbors={neighbors} />
-          </section>
-        </div>
-      </div>
+	        <div className="space-y-10">
+	          <section>
+	            <ActorRelationshipGraph
+	              actorOptions={actorOptions}
+	              initialActorId={actor.entityId}
+	              initialDepth={2}
+	              initialIncludeSimilarity={false}
+	            />
+	          </section>
+	        </div>
+	      </div>
 
       <section className="mt-10 space-y-4">
         <TopTtpSection items={techniques} totalCount={facetCounts.ttpCount} />

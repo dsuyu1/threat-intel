@@ -16,6 +16,7 @@
     "run:custom": "tsx src/agents/custom.ts",
     "run:merge": "tsx src/agents/merge.ts",
     "run:vector-smoke": "tsx src/agents/vector-smoke.ts",
+    "run:on-demand": "tsx src/run-on-demand.ts",
     "run:all": "tsx src/run-all.ts",
     "build": "tsc --noEmit",
     "deploy": "serverless deploy --stage prod",

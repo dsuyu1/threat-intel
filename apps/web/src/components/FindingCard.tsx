@@ -71,6 +71,8 @@ export function FindingCard({ finding, teaser = false, className = "" }: Props) 
   const score = parseCvss(finding.cvssScore);
   const isKev = hasTag(finding.tags, "kev");
   const isExploited = hasTag(finding.tags, "actively-exploited") || isKev;
+  const isPocFinding = hasPoc(finding);
+  const primarySourceUrl = isPocFinding ? finding.pocUrl ?? finding.sourceUrl : finding.sourceUrl;
 
   return (
     <div
@@ -112,7 +114,7 @@ export function FindingCard({ finding, teaser = false, className = "" }: Props) 
               </span>
             ) : null}
 
-            {hasPoc(finding) ? (
+            {isPocFinding ? (
               <span className="text-xs bg-zinc-900 border border-zinc-800 text-zinc-300 px-2 py-0.5 rounded">
                 PoC
               </span>
@@ -150,9 +152,9 @@ export function FindingCard({ finding, teaser = false, className = "" }: Props) 
 
           {!teaser ? (
             <div className="flex items-center gap-3 mt-2">
-              {finding.sourceUrl ? (
+              {primarySourceUrl ? (
                 <a
-                  href={finding.sourceUrl}
+                  href={primarySourceUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs text-blue-500 hover:text-blue-400 transition-colors"
@@ -161,7 +163,7 @@ export function FindingCard({ finding, teaser = false, className = "" }: Props) 
                   Source →
                 </a>
               ) : null}
-              {finding.pocUrl ? (
+              {!isPocFinding && finding.pocUrl ? (
                 <a
                   href={finding.pocUrl}
                   target="_blank"

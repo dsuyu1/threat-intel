@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 import { getDb, findings } from "@ti/db";
 import { eq } from "drizzle-orm";
 import { CvssVolumeBar } from "../../../components/CvssVolumeBar";
+import { CopyToClipboardButton } from "../../../components/ui/CopyToClipboardButton";
+import { getViewerContext } from "../../../lib/tenancy";
 import { fixText } from "../../../lib/text";
 
 async function getFindingById(id: string) {
@@ -34,7 +36,9 @@ export default async function FindingPage({
   const finding = await getFindingById(id);
   if (!finding) notFound();
 
+  const ctx = await getViewerContext();
   const tags = parseTags(finding.tags);
+  const primarySourceUrl = finding.pocUrl ?? finding.sourceUrl;
 
   return (
     <div className="max-w-[90ch] mx-auto px-8 py-10 space-y-6">
@@ -63,6 +67,32 @@ export default async function FindingPage({
           )}
         </div>
       </header>
+
+      <section className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-black/30 backdrop-blur p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Finding UUID</div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <code className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-black/20 px-2.5 py-1.5 text-xs font-mono text-zinc-800 dark:text-zinc-100">
+                {finding.id}
+              </code>
+            </div>
+            <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+              Use this UUID when generating playbooks (Source: Finding).
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <CopyToClipboardButton text={finding.id} label="Finding UUID" />
+            <Link
+              href={`/p/${ctx.project.slug}/playbooks/new?sourceKind=finding&sourceId=${finding.id}`}
+              className="h-9 inline-flex items-center rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 px-3 text-sm font-medium hover:opacity-95"
+            >
+              Create playbook
+            </Link>
+          </div>
+        </div>
+      </section>
 
       {finding.summary && (
         <section className="space-y-2">
@@ -126,13 +156,13 @@ export default async function FindingPage({
         </section>
       )}
 
-      {(finding.sourceUrl || finding.pocUrl) && (
+      {primarySourceUrl && (
         <section className="space-y-2">
           <h1 className="text-sm font-semibold text-zinc-200">Links</h1>
           <div className="flex flex-col gap-2 text-sm">
-            {finding.sourceUrl && (
+            {primarySourceUrl && (
               <a
-                href={finding.sourceUrl}
+                href={primarySourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-500 hover:text-blue-400 transition-colors break-all"
@@ -140,7 +170,7 @@ export default async function FindingPage({
                 Source ↗
               </a>
             )}
-            {finding.pocUrl && (
+            {false && (
               <a
                 href={finding.pocUrl}
                 target="_blank"

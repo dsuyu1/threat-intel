@@ -86,8 +86,16 @@ function renderFindingsForPrompt(rows: Array<{ agent: string; title: string; cve
     .join("\n");
 }
 
-export async function runCustomAgents() {
+export async function runCustomAgents(params?: { onlyId?: string; force?: boolean }) {
   const db = getDb();
+
+  const onlyId = String(params?.onlyId ?? "").trim();
+  const force = Boolean(params?.force);
+  const conditions = [];
+  if (onlyId) conditions.push(eq(customAgents.id, onlyId));
+  // Scheduled/default runs only execute enabled agents; manual "onlyId+force" can run even if disabled.
+  if (!onlyId) conditions.push(eq(customAgents.enabled, true));
+  const whereExpr = conditions.length ? and(...conditions) : undefined;
 
   const agents = await db
     .select({
@@ -101,16 +109,22 @@ export async function runCustomAgents() {
       lastRunAt: customAgents.lastRunAt,
     })
     .from(customAgents)
-    .where(eq(customAgents.enabled, true))
+    .where(whereExpr)
     .orderBy(desc(customAgents.updatedAt))
-    .limit(50);
+    .limit(onlyId ? 1 : 50);
 
-  const now = Date.now();
-  const due = agents.filter((a) => {
-    const everyMs = Math.max(5, Number(a.scheduleMinutes ?? 1440)) * 60 * 1000;
-    if (!a.lastRunAt) return true;
-    return now - new Date(a.lastRunAt as any).getTime() >= everyMs;
-  });
+  const due = force
+    ? agents
+    : (() => {
+        const now = Date.now();
+        return agents.filter((a) => {
+          const everyMs = Math.max(5, Number(a.scheduleMinutes ?? 1440)) * 60 * 1000;
+          if (!a.lastRunAt) return true;
+          return now - new Date(a.lastRunAt as any).getTime() >= everyMs;
+        });
+      })();
+
+  const runIds: string[] = [];
 
   for (const a of due) {
     const run = await startRun({
@@ -121,6 +135,7 @@ export async function runCustomAgents() {
       customAgentId: a.id,
     });
 
+    runIds.push(run.id);
     await logRunEvent({ runId: run.id, message: `Custom agent: ${a.name}` });
 
     try {
@@ -256,6 +271,8 @@ export async function runCustomAgents() {
       await finishRun({ runId: run.id, status: "failed", startedAt: run.startedAt, error: err });
     }
   }
+
+  return runIds;
 }
 
 if (process.argv[1]?.endsWith("custom.ts")) {

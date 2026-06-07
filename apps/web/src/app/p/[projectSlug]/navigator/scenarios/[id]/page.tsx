@@ -350,6 +350,12 @@ export default async function NavigatorScenarioPage({
           <div className="text-3xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{scenario.score}</div>
           <div className="mt-1 text-xs text-zinc-500 uppercase tracking-wide">{band}</div>
           <a
+            href={`/p/${projectSlug}/playbooks/new?sourceKind=navigator_scenario&sourceId=${scenario.id}`}
+            className="mt-3 inline-flex rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 px-3 py-1.5 text-sm font-medium hover:opacity-95"
+          >
+            Generate playbook
+          </a>
+          <a
             href={`/api/navigator/scenarios/${scenario.id}/layer`}
             className="mt-3 inline-flex rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-black/30 px-3 py-1.5 text-sm hover:bg-white dark:hover:bg-black/40"
           >

@@ -35,25 +35,3 @@ h3,
 h4 {
   text-wrap: balance;
 }
-
-@keyframes cti-float {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) rotate(-0.6deg);
-  }
-  50% {
-    transform: translate3d(0, -10px, 0) rotate(0.6deg);
-  }
-}
-
-@keyframes cti-glow {
-  0%,
-  100% {
-    opacity: 0.55;
-    transform: translate3d(0, 0, 0) scale(0.98);
-  }
-  50% {
-    opacity: 0.85;
-    transform: translate3d(0, -6px, 0) scale(1.03);
-  }
-}

@@ -81,7 +81,7 @@ function Nav() {
         about
       </a>
       <a
-        href="/landing"
+        href="/"
         className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors duration-250 ease-[cubic-bezier(0.16,1,0.3,1)]"
       >
         platform

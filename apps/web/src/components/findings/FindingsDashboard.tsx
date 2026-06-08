@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { buildHref, clamp, parsePositiveInt } from "../../lib/search-params";
+import { normalizeMitreTechniqueId } from "../../lib/mitre";
 import { FindingCard, type FindingCardModel } from "../FindingCard";
 
 type SortKey = "cvss" | "date" | "type";
@@ -12,6 +13,7 @@ type SortDir = "asc" | "desc";
 export type FindingsSearchParams = {
   q?: string;
   type?: string;
+  mitreId?: string;
   minCvss?: string;
   maxCvss?: string;
   minEpss?: string;
@@ -247,6 +249,7 @@ export function FindingsDashboard({
   initialSearchParams: FindingsSearchParams;
 }) {
   const router = useRouter();
+  const mitreId = normalizeMitreTechniqueId(initialSearchParams.mitreId);
 
   const [query, setQuery] = useState(() => String(initialSearchParams.q ?? ""));
   const [type, setType] = useState<(typeof TYPE_KEYS)[number] | null>(() => {
@@ -590,6 +593,7 @@ export function FindingsDashboard({
     const p: FindingsSearchParams = {};
     if (query.trim()) p.q = query.trim();
     if (type) p.type = type;
+    if (mitreId) p.mitreId = mitreId;
     if (bandFilter) p.band = bandFilter;
     if (minCvss > 0) p.minCvss = String(minCvss);
     if (maxCvss < 10) p.maxCvss = String(maxCvss);
@@ -609,6 +613,7 @@ export function FindingsDashboard({
   }, [
     query,
     type,
+    mitreId,
     bandFilter,
     minCvss,
     maxCvss,

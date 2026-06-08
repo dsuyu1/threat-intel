@@ -2,8 +2,9 @@ export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 import { getDb, findings } from "@ti/db";
-import { desc } from "drizzle-orm";
+import { and, desc, sql } from "drizzle-orm";
 import { toIsoStringSafe } from "../../../lib/dates";
+import { normalizeMitreTechniqueId } from "../../../lib/mitre";
 import {
   FindingsDashboard,
   type FindingsSearchParams,
@@ -26,8 +27,27 @@ function parseTags(tagsJson: string | null): string[] {
   }
 }
 
-async function getLatestFindings(): Promise<FindingCardModel[]> {
+function parseDays(value: unknown) {
+  const n = Number(value ?? "");
+  if (!Number.isFinite(n)) return 0;
+  const i = Math.floor(n);
+  return i > 0 && i <= 365 ? i : 0;
+}
+
+async function getLatestFindings(sp: FindingsSearchParams): Promise<FindingCardModel[]> {
   const db = getDb();
+  const mitreId = normalizeMitreTechniqueId(sp.mitreId);
+  const days = parseDays(sp.days);
+  const cutoff = days ? new Date(Date.now() - days * 24 * 60 * 60 * 1000) : null;
+
+  const mitreCond = mitreId
+    ? sql<boolean>`(',' || COALESCE(${findings.mitreIds}, '') || ',') ILIKE '%,' || ${mitreId} || ',%'`
+    : null;
+  const dateCond = cutoff
+    ? sql<boolean>`COALESCE(${findings.publishedAt}, ${findings.createdAt}) >= ${cutoff}`
+    : null;
+  const where = [mitreCond, dateCond].filter(Boolean) as any[];
+  const whereWithoutMitre = [dateCond].filter(Boolean) as any[];
 
   let rows: Array<{
     id: string;
@@ -51,7 +71,7 @@ async function getLatestFindings(): Promise<FindingCardModel[]> {
   }> = [];
 
   try {
-    rows = await db
+    let q = db
       .select({
         id: findings.id,
         agent: findings.agent,
@@ -73,12 +93,16 @@ async function getLatestFindings(): Promise<FindingCardModel[]> {
         createdAt: findings.createdAt,
       })
       .from(findings)
-      .orderBy(desc(findings.publishedAt), desc(findings.createdAt), desc(findings.id))
-      .limit(500);
+      .$dynamic();
+
+    if (where.length) q = q.where(and(...where));
+
+    rows = await q.orderBy(desc(findings.publishedAt), desc(findings.createdAt), desc(findings.id)).limit(500);
   } catch (err) {
     // If the DB is behind migrations (common in local dev), fall back to a query that doesn't reference newer columns.
     if (!isMissingColumn(err)) throw err;
-    rows = await db
+
+    let q = db
       .select({
         id: findings.id,
         agent: findings.agent,
@@ -97,8 +121,11 @@ async function getLatestFindings(): Promise<FindingCardModel[]> {
         createdAt: findings.createdAt,
       })
       .from(findings)
-      .orderBy(desc(findings.publishedAt), desc(findings.createdAt), desc(findings.id))
-      .limit(500);
+      .$dynamic();
+
+    const safeWhere = mitreId ? whereWithoutMitre : where;
+    if (safeWhere.length) q = q.where(and(...safeWhere));
+    rows = await q.orderBy(desc(findings.publishedAt), desc(findings.createdAt), desc(findings.id)).limit(500);
   }
 
   return rows.map((r) => ({
@@ -129,6 +156,6 @@ export default async function FindingsPage({
   searchParams: Promise<FindingsSearchParams>;
 }) {
   const sp = await searchParams;
-  const rows = await getLatestFindings();
+  const rows = await getLatestFindings(sp);
   return <FindingsDashboard rows={rows} initialSearchParams={sp} />;
 }

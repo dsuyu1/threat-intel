@@ -202,10 +202,11 @@ const ATTACK_TACTIC_LABEL_BY_PHASE: Record<string, string> = {
   impact: "Impact",
 };
 
-function getTechniqueTacticsFromKillChainPhases(phases: unknown): string[] {
-  if (!Array.isArray(phases)) return [];
+function getTechniqueTacticsFromKillChainPhases(phases: unknown): { slugs: string[]; labels: string[] } {
+  if (!Array.isArray(phases)) return { slugs: [], labels: [] };
 
-  const out: string[] = [];
+  const slugs: string[] = [];
+  const labels: string[] = [];
   const seen = new Set<string>();
   for (const p of phases) {
     if (!p || typeof p !== "object") continue;
@@ -213,9 +214,185 @@ function getTechniqueTacticsFromKillChainPhases(phases: unknown): string[] {
     if (!phase) continue;
     const label = ATTACK_TACTIC_LABEL_BY_PHASE[phase];
     if (!label) continue;
-    if (seen.has(label)) continue;
-    seen.add(label);
-    out.push(label);
+    if (seen.has(phase)) continue;
+    seen.add(phase);
+    slugs.push(phase);
+    labels.push(label);
+  }
+  return { slugs, labels };
+}
+
+const D3FEND_MAPPING_URLS = [
+  "https://d3fend.mitre.org/api/mappings/attack-mitigations.json",
+  "https://d3fend.mitre.org/api/mappings/attack-mitigations.csv",
+  "https://raw.githubusercontent.com/d3fend/d3fend/gh-pages/api/mappings/attack-mitigations.json",
+  "https://raw.githubusercontent.com/d3fend/d3fend/gh-pages/api/mappings/attack-mitigations.csv",
+  "https://d3fend.mitre.org/mappings/attack-mitigations/",
+] as const;
+
+const D3FEND_TECHNIQUES_CSV_URL = "https://d3fend.mitre.org/ontologies/d3fend.csv";
+
+type D3fendTechniqueMeta = {
+  id: string; // e.g. "D3-LFP"
+  name: string;
+  description: string | null;
+  category: string | null;
+  url: string | null;
+};
+
+function parseDelimitedRows(input: string, delimiter: "," | "\t"): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+
+  const pushCell = () => {
+    row.push(cur);
+    cur = "";
+  };
+
+  const pushRow = () => {
+    while (row.length && row[row.length - 1] === "") row.pop();
+    rows.push(row);
+    row = [];
+  };
+
+  const s = String(input ?? "");
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]!;
+
+    if (inQuotes) {
+      if (ch === '"') {
+        const next = s[i + 1];
+        if (next === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cur += ch;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inQuotes = true;
+      continue;
+    }
+
+    if (ch === delimiter) {
+      pushCell();
+      continue;
+    }
+
+    if (ch === "\n") {
+      pushCell();
+      pushRow();
+      continue;
+    }
+
+    if (ch === "\r") continue;
+    cur += ch;
+  }
+
+  pushCell();
+  if (row.length) pushRow();
+
+  return rows.filter((r) => r.some((c) => c.trim() !== ""));
+}
+
+function detectDelimiter(input: string): "," | "\t" {
+  const firstLine = String(input ?? "").split(/\r?\n/)[0] ?? "";
+  if (firstLine.includes("\t")) return "\t";
+  return ",";
+}
+
+const MITRE_MITIGATION_ID_RE = /\bM\d{4}\b/g;
+const D3FEND_ID_RE = /\bD3-[A-Z0-9]{2,}\b/g;
+
+export function parseD3fendTechniquesCsv(csv: string): Map<string, D3fendTechniqueMeta> {
+  const delimiter = detectDelimiter(csv);
+  const rows = parseDelimitedRows(csv, delimiter);
+  if (!rows.length) return new Map();
+
+  const header = rows[0]!.map((h) => h.trim().toLowerCase());
+  const col = (name: string) => header.findIndex((h) => h === name);
+  const idxId = col("id");
+  const idxLabel = col("label");
+  const idxName = idxLabel >= 0 ? idxLabel : col("name");
+  const idxDefinition = col("definition");
+  const idxDesc = idxDefinition >= 0 ? idxDefinition : col("description");
+  const idxCategory = col("category");
+
+  const out = new Map<string, D3fendTechniqueMeta>();
+  for (const r of rows.slice(1)) {
+    const id = String(r[idxId] ?? "").trim();
+    if (!id || !/^D3-/.test(id)) continue;
+    const name = String(r[idxName] ?? "").trim() || id;
+    const description = String(r[idxDesc] ?? "").trim() || null;
+    const category = String(r[idxCategory] ?? "").trim() || null;
+    const url = `https://d3fend.mitre.org/search/?q=${encodeURIComponent(id)}`;
+    out.set(id, { id, name, description, category, url });
+  }
+  return out;
+}
+
+export function parseD3fendMitigationMappings(payload: string): Array<{ mitigationId: string; d3fendIds: string[] }> {
+  const s = String(payload ?? "");
+  const trimmed = s.trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      const rows: any[] = Array.isArray(parsed)
+        ? (parsed as any[])
+        : Array.isArray((parsed as any)?.rows)
+          ? (parsed as any).rows
+          : Array.isArray((parsed as any)?.data)
+            ? (parsed as any).data
+            : [];
+
+      const out: Array<{ mitigationId: string; d3fendIds: string[] }> = [];
+      for (const r of rows) {
+        if (!r || typeof r !== "object") continue;
+        const raw = JSON.stringify(r);
+        const mids = raw.match(MITRE_MITIGATION_ID_RE) ?? [];
+        const d3s = raw.match(D3FEND_ID_RE) ?? [];
+        const mitigationId = mids[0];
+        if (!mitigationId || d3s.length === 0) continue;
+        out.push({ mitigationId, d3fendIds: Array.from(new Set(d3s)) });
+      }
+      if (out.length) return out;
+    } catch {
+      // Fall through.
+    }
+  }
+
+  if (trimmed.includes(",") || trimmed.includes("\t")) {
+    const delimiter = detectDelimiter(trimmed);
+    const rows = parseDelimitedRows(trimmed, delimiter);
+    const out: Array<{ mitigationId: string; d3fendIds: string[] }> = [];
+    for (const r of rows.slice(1)) {
+      const joined = r.join(" ");
+      const mids = joined.match(MITRE_MITIGATION_ID_RE) ?? [];
+      const d3s = joined.match(D3FEND_ID_RE) ?? [];
+      const mitigationId = mids[0];
+      if (!mitigationId || d3s.length === 0) continue;
+      out.push({ mitigationId, d3fendIds: Array.from(new Set(d3s)) });
+    }
+    if (out.length) return out;
+  }
+
+  const out: Array<{ mitigationId: string; d3fendIds: string[] }> = [];
+  const trs = s.match(/<tr[\s\S]*?<\/tr>/gi) ?? [];
+  for (const tr of trs) {
+    const mids = tr.match(MITRE_MITIGATION_ID_RE) ?? [];
+    const d3s = tr.match(D3FEND_ID_RE) ?? [];
+    const mitigationId = mids[0];
+    if (!mitigationId || d3s.length === 0) continue;
+    out.push({ mitigationId, d3fendIds: Array.from(new Set(d3s)) });
   }
   return out;
 }
@@ -241,6 +418,83 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
 
   await Promise.all(workers);
   return results;
+}
+
+async function fetchFirstOkText(urls: readonly string[]): Promise<{ url: string; text: string }> {
+  let lastErr: unknown = null;
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          "User-Agent": MITRE_UA,
+          Accept: "text/plain, text/csv, application/json, text/html;q=0.9,*/*;q=0.8",
+        },
+      });
+      if (!res.ok) throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
+      const text = await res.text();
+      if (!text.trim()) throw new Error("Empty response");
+      return { url, text };
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("Failed to fetch D3FEND mapping");
+}
+
+async function syncD3fendMappings(now: Date, sourceId: string) {
+  console.log("[TtpAgent] Syncing D3FEND attack-mitigation mappings...");
+
+  const [csvRes, mappingRes] = await Promise.all([
+    fetchFirstOkText([D3FEND_TECHNIQUES_CSV_URL]),
+    fetchFirstOkText(D3FEND_MAPPING_URLS),
+  ]);
+
+  const metaById = parseD3fendTechniquesCsv(csvRes.text);
+  const mappings = parseD3fendMitigationMappings(mappingRes.text);
+
+  const entityById = new Map<string, EntityRow>();
+  const relationByKey = new Map<string, RelationRow>();
+
+  for (const m of mappings) {
+    for (const d3id of m.d3fendIds) {
+      const meta = metaById.get(d3id) ?? null;
+      if (!entityById.has(d3id)) {
+        entityById.set(d3id, {
+          kind: "d3fend_technique",
+          entityId: d3id,
+          name: meta?.name ?? d3id,
+          aliases: null,
+          description: meta?.description ?? null,
+          attributes: {
+            source: "mitre-d3fend",
+            url: meta?.url ?? `https://d3fend.mitre.org/search/?q=${encodeURIComponent(d3id)}`,
+            category: meta?.category ?? null,
+          },
+        });
+      }
+
+      const key = `mitigation_mapped_to_d3fend||${m.mitigationId}||${d3id}`;
+      relationByKey.set(key, {
+        type: "mitigation_mapped_to_d3fend",
+        fromKind: "mitigation",
+        fromId: m.mitigationId,
+        toKind: "d3fend_technique",
+        toId: d3id,
+        support: 1,
+        confidence: 1,
+        firstSeen: now,
+        lastSeen: now,
+        attributes: { source: "mitre-d3fend", mapping: "attack-mitigations", sourceId },
+      });
+    }
+  }
+
+  await upsertEntities(Array.from(entityById.values()), now);
+  await upsertRelations(Array.from(relationByKey.values()));
+
+  console.log(
+    `[TtpAgent] D3FEND sync done. Techniques: ${entityById.size} | Mappings: ${relationByKey.size} (source: ${mappingRes.url})`
+  );
 }
 
 async function syncMitreCampaignsFromWeb(now: Date): Promise<void> {
@@ -472,6 +726,9 @@ export async function runTtpAgent() {
   console.log("[TtpAgent] Starting...");
   const db = getDb();
   const src = await getStixSource();
+  const syncD3fend =
+    (process.env["TTP_SYNC_D3FEND"] ?? "").toLowerCase() !== "0" &&
+    (process.env["TTP_SYNC_D3FEND"] ?? "").toLowerCase() !== "false";
   const forceFetch =
     process.argv.includes("--force") ||
     process.env["TTP_FORCE"] === "1" ||
@@ -576,7 +833,8 @@ export async function runTtpAgent() {
         attributes: {
           source: "mitre-attack",
           citations: getAttackCitations(tech.external_references),
-          tactics,
+          tactics: tactics.slugs,
+          tacticLabels: tactics.labels,
         },
       });
       idMap.set(tech.id, { kind: "technique", entityId: tid });
@@ -755,6 +1013,11 @@ export async function runTtpAgent() {
   await insertAliases(aliasRows);
   await upsertRelations(relationRows);
   await syncMitreCampaignsFromWeb(now);
+  if (syncD3fend) {
+    await syncD3fendMappings(now, src.id);
+  } else {
+    console.log("[TtpAgent] Skipping D3FEND sync (TTP_SYNC_D3FEND=0).");
+  }
 
   console.log("[TtpAgent] Done.");
 }

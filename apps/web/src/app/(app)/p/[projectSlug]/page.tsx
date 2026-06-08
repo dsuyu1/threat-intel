@@ -541,7 +541,7 @@ async function getDashboardData(params: { range: RangeId; projectId: string; use
       enabled: 0,
       staleEnabled: 0,
       lastFetchedAt: null as string | null,
-      top: [] as Array<{ id: string; name: string; url: string; type: string; enabled: boolean }>,
+      all: [] as Array<{ id: string; name: string; url: string; type: string; enabled: boolean }>,
     },
     agentRuns: {
       schemaReady: true,
@@ -569,7 +569,7 @@ async function getDashboardData(params: { range: RangeId; projectId: string; use
       .from(sources)
       .where(eq(sources.enabled, true));
 
-    const top = await db
+    const all = await db
       .select({
         id: sources.id,
         name: sources.name,
@@ -578,15 +578,13 @@ async function getDashboardData(params: { range: RangeId; projectId: string; use
         enabled: sources.enabled,
       })
       .from(sources)
-      .where(eq(sources.enabled, true))
-      .orderBy(desc(sources.reliability), desc(sources.lastFetchedAt), asc(sources.name))
-      .limit(14);
+      .orderBy(desc(sources.enabled), asc(sources.name));
 
     ops.sources.total = Number(total ?? 0);
     ops.sources.enabled = Number(enabled ?? 0);
     ops.sources.staleEnabled = Number(stale ?? 0);
     ops.sources.lastFetchedAt = toIsoStringSafe(lastFetchedAt);
-    ops.sources.top = top.map((s) => ({
+    ops.sources.all = all.map((s) => ({
       id: s.id,
       name: String(s.name),
       url: String(s.url),
@@ -594,7 +592,7 @@ async function getDashboardData(params: { range: RangeId; projectId: string; use
       enabled: !!s.enabled,
     }));
   } catch (err) {
-    if (isMissingTable(err)) ops.sources.schemaReady = false;
+    if (isSchemaOutOfDate(err)) ops.sources.schemaReady = false;
     else throw err;
   }
 
@@ -623,7 +621,7 @@ async function getDashboardData(params: { range: RangeId; projectId: string; use
       };
     }
   } catch (err) {
-    if (isMissingTable(err)) ops.agentRuns.schemaReady = false;
+    if (isSchemaOutOfDate(err)) ops.agentRuns.schemaReady = false;
     else throw err;
   }
 
@@ -633,7 +631,7 @@ async function getDashboardData(params: { range: RangeId; projectId: string; use
     const severityText = sql<string>`${findings.severity}::text`;
     const severityExpr = sql<string>`case
       when ${findings.severity} is not null and btrim(${severityText}) <> '' then lower(${severityText})
-      when ${findings.cvssScore} is not null and ${findings.cvssScore} ~ '^[0-9]+([.][0-9]+)?$' then
+      when ${findings.cvssScore} is not null then
         case
           when (${findings.cvssScore}::numeric) >= 9 then 'critical'
           when (${findings.cvssScore}::numeric) >= 7 then 'high'
@@ -662,7 +660,7 @@ async function getDashboardData(params: { range: RangeId; projectId: string; use
       else severityMix.unscored += total;
     }
   } catch (err) {
-    if (!isMissingTable(err)) throw err;
+    if (!isSchemaOutOfDate(err)) throw err;
   }
 
   const trend = await getTrendSeries({ db, range: params.range });
@@ -1179,57 +1177,7 @@ export default async function DashboardHome({
         />
       </section>
 
-      <section className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
-          {data.ops.sources.schemaReady ? (
-            <SourceLogoStrip
-              sources={data.ops.sources.top}
-              description={
-                <span className="tabular-nums">
-                  {nf(Number(data.ops.sources.enabled ?? 0))} enabled •{" "}
-                  {nf(Number(data.ops.sources.staleEnabled ?? 0))} stale (24h) • Last fetch:{" "}
-                  {data.ops.sources.lastFetchedAt
-                    ? new Date(data.ops.sources.lastFetchedAt).toLocaleString("en-US", {
-                        month: "short",
-                        day: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    : "—"}
-                </span>
-              }
-              right={
-                <div className="flex items-center gap-3">
-                  <a href="/data/sources" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
-                    Manage
-                  </a>
-                  <a href="/data/sources/new" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
-                    Add
-                  </a>
-                </div>
-              }
-            />
-          ) : (
-            <Card className="shadow-sm dark:shadow-black/30">
-              <CardHeader
-                title="Sources"
-                description="RSS + STIX feeds powering ingestion."
-                border={false}
-                right={
-                  <a href="/data/sources" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
-                    Open
-                  </a>
-                }
-              />
-              <CardContent className="pt-2">
-                <div className="py-4 text-sm text-zinc-500">
-                  Source tables are missing. Run <span className="font-mono">pnpm db:migrate</span>.
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
+      <section className="mt-6">
         <Card className="shadow-sm dark:shadow-black/30">
           <CardHeader
             title="Ops health"
@@ -1574,6 +1522,58 @@ export default async function DashboardHome({
             </div>
           </CardContent>
         </Card>
+      </section>
+
+      <section className="mt-6">
+        {data.ops.sources.schemaReady ? (
+          <SourceLogoStrip
+            sources={data.ops.sources.all}
+            wrap
+            maxHeight={260}
+            description={
+              <span className="tabular-nums">
+                {nf(Number(data.ops.sources.total ?? 0))} total • {nf(Number(data.ops.sources.enabled ?? 0))} enabled •{" "}
+                {nf(Number(data.ops.sources.staleEnabled ?? 0))} stale (24h) • Last fetch:{" "}
+                {data.ops.sources.lastFetchedAt
+                  ? new Date(data.ops.sources.lastFetchedAt).toLocaleString("en-US", {
+                      month: "short",
+                      day: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "—"}
+              </span>
+            }
+            right={
+              <div className="flex items-center gap-3">
+                <a href="/data/sources" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+                  Manage
+                </a>
+                <a href="/data/sources/new" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+                  Add
+                </a>
+              </div>
+            }
+          />
+        ) : (
+          <Card className="shadow-sm dark:shadow-black/30">
+            <CardHeader
+              title="Sources"
+              description="RSS + STIX feeds powering ingestion."
+              border={false}
+              right={
+                <a href="/data/sources" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+                  Open
+                </a>
+              }
+            />
+            <CardContent className="pt-2">
+              <div className="py-4 text-sm text-zinc-500">
+                Source tables are missing. Run <span className="font-mono">pnpm db:migrate</span>.
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </section>
     </div>
   );

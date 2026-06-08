@@ -32,14 +32,22 @@ function faviconUrl(hostname: string) {
 }
 
 export function SourceLogoStrip({
-  sources,
+  sources = [],
   description = "Live feeds powering ingestion (RSS + STIX).",
   right,
+  wrap = false,
+  maxHeight = 220,
 }: {
-  sources: SourceRow[];
+  sources?: SourceRow[];
   description?: ReactNode;
   right?: ReactNode;
+  wrap?: boolean;
+  maxHeight?: number;
 }) {
+  const listClassName = wrap
+    ? "flex flex-wrap items-center gap-3 overflow-y-auto py-1 pr-1"
+    : "flex items-center gap-3 overflow-x-auto no-scrollbar py-1";
+
   return (
     <Card>
       <CardHeader
@@ -57,60 +65,64 @@ export function SourceLogoStrip({
         }
       />
       <CardContent>
-        <div className="flex items-center gap-3 overflow-x-auto no-scrollbar py-1">
-          {sources.map((s) => {
-            const hostname = hostnameFromUrl(s.url);
-            const href = safeExternalHref(s.url);
+        {sources.length ? (
+          <div className={listClassName} style={wrap ? { maxHeight } : undefined}>
+            {sources.map((s) => {
+              const hostname = hostnameFromUrl(s.url);
+              const href = safeExternalHref(s.url);
 
-            const content = (
-              <>
-                <div className="relative h-6 w-6 rounded-full bg-zinc-100 dark:bg-zinc-900 overflow-hidden border border-zinc-200 dark:border-zinc-800">
-                  {hostname ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={faviconUrl(hostname)}
-                      alt=""
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : null}
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="text-sm text-zinc-800 dark:text-zinc-200 whitespace-nowrap">
-                    {s.name}
+              const content = (
+                <>
+                  <div className="relative h-6 w-6 rounded-full bg-zinc-100 dark:bg-zinc-900 overflow-hidden border border-zinc-200 dark:border-zinc-800">
+                    {hostname ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={faviconUrl(hostname)}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : null}
                   </div>
-                  {!s.enabled ? (
-                    <span className="text-[10px] rounded-full border border-zinc-300 dark:border-zinc-700 px-2 py-0.5 text-zinc-600 dark:text-zinc-400">
-                      disabled
-                    </span>
-                  ) : null}
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm text-zinc-800 dark:text-zinc-200 whitespace-nowrap">
+                      {s.name}
+                    </div>
+                    {!s.enabled ? (
+                      <span className="text-[10px] rounded-full border border-zinc-300 dark:border-zinc-700 px-2 py-0.5 text-zinc-600 dark:text-zinc-400">
+                        disabled
+                      </span>
+                    ) : null}
+                  </div>
+                </>
+              );
+
+              const className =
+                "shrink-0 group flex items-center gap-2 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-black/20 px-3 py-2 transition-colors";
+              const title = `${s.name} • ${s.type}${s.enabled ? "" : " (disabled)"}`;
+
+              return href ? (
+                <a
+                  key={s.id}
+                  className={`${className} hover:bg-white/70 dark:hover:bg-black/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40`}
+                  title={title}
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  {content}
+                </a>
+              ) : (
+                <div key={s.id} className={className} title={title}>
+                  {content}
                 </div>
-              </>
-            );
-
-            const className =
-              "shrink-0 group flex items-center gap-2 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-black/20 px-3 py-2 transition-colors";
-            const title = `${s.name} • ${s.type}${s.enabled ? "" : " (disabled)"}`;
-
-            return href ? (
-              <a
-                key={s.id}
-                className={`${className} hover:bg-white/70 dark:hover:bg-black/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40`}
-                title={title}
-                href={href}
-                target="_blank"
-                rel="noreferrer noopener"
-              >
-                {content}
-              </a>
-            ) : (
-              <div key={s.id} className={className} title={title}>
-                {content}
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="py-4 text-sm text-zinc-500">No sources configured yet.</div>
+        )}
       </CardContent>
     </Card>
   );

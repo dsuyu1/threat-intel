@@ -1178,79 +1178,82 @@ export default async function DashboardHome({
       </section>
 
       <section className="mt-6">
-        <Card className="shadow-sm dark:shadow-black/30">
-          <CardHeader
-            title="Ops health"
-            description="Ingestion + agent runs (last 24h)."
-            border={false}
-            right={
-              <a href="/agents" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
-                Open
-              </a>
-            }
-          />
-          <CardContent className="pt-2">
-            {!data.ops.agentRuns.schemaReady ? (
-              <div className="py-4 text-sm text-zinc-500">
-                Agent run tables are missing. Run <span className="font-mono">pnpm db:migrate</span>.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <a
-                  href="/data/sources"
-                  className={`block rounded-xl border px-4 py-3 transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${
-                    Number(data.ops.sources.staleEnabled ?? 0) > 0
-                      ? "border-amber-200/80 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20"
-                      : "border-zinc-200/70 dark:border-zinc-800/80"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Sources freshness</div>
-                      <div className="mt-0.5 text-[11px] text-zinc-500 tabular-nums">
-                        {nf(Number(data.ops.sources.enabled ?? 0))} enabled • {nf(Number(data.ops.sources.staleEnabled ?? 0))} stale (24h)
-                      </div>
-                    </div>
-                    <div className="text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
-                      {data.ops.sources.lastFetchedAt
-                        ? new Date(data.ops.sources.lastFetchedAt).toLocaleTimeString("en-US", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : "—"}
-                    </div>
-                  </div>
+        <div className="flex justify-stretch lg:justify-end">
+          <Card className="w-full lg:w-[420px] xl:w-[460px] shadow-sm dark:shadow-black/30">
+            <CardHeader
+              dense
+              title="Ops health"
+              description="Ingestion + agent runs (24h)."
+              border={false}
+              right={
+                <a href="/agents" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+                  Open
                 </a>
-
-                <a
-                  href="/agents"
-                  className={`block rounded-xl border px-4 py-3 transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${
-                    Number(data.ops.agentRuns.failed24h ?? 0) > 0
-                      ? "border-rose-200/80 dark:border-rose-900/60 bg-rose-50/60 dark:bg-rose-950/20"
-                      : "border-zinc-200/70 dark:border-zinc-800/80"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Agent failures</div>
-                      <div className="mt-0.5 text-[11px] text-zinc-500 tabular-nums">
-                        {nf(Number(data.ops.agentRuns.failed24h ?? 0))} failed in last 24h
+              }
+            />
+            <CardContent dense>
+              {!data.ops.agentRuns.schemaReady ? (
+                <div className="py-2 text-sm text-zinc-500">
+                  Agent run tables are missing. Run <span className="font-mono">pnpm db:migrate</span>.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <a
+                    href="/data/sources"
+                    className={`block rounded-xl border px-3 py-2.5 transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${
+                      Number(data.ops.sources.staleEnabled ?? 0) > 0
+                        ? "border-amber-200/80 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20"
+                        : "border-zinc-200/70 dark:border-zinc-800/80"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Sources freshness</div>
+                        <div className="mt-0.5 text-[11px] text-zinc-500 tabular-nums">
+                          {nf(Number(data.ops.sources.enabled ?? 0))} enabled • {nf(Number(data.ops.sources.staleEnabled ?? 0))} stale
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[11px] text-zinc-500">Last run</div>
-                      <div className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
-                        {data.ops.agentRuns.lastRun
-                          ? `${data.ops.agentRuns.lastRun.agentKey} • ${data.ops.agentRuns.lastRun.status}`
+                      <div className="text-base font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
+                        {data.ops.sources.lastFetchedAt
+                          ? new Date(data.ops.sources.lastFetchedAt).toLocaleTimeString("en-US", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
                           : "—"}
                       </div>
                     </div>
-                  </div>
-                </a>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  </a>
+
+                  <a
+                    href="/agents"
+                    className={`block rounded-xl border px-3 py-2.5 transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${
+                      Number(data.ops.agentRuns.failed24h ?? 0) > 0
+                        ? "border-rose-200/80 dark:border-rose-900/60 bg-rose-50/60 dark:bg-rose-950/20"
+                        : "border-zinc-200/70 dark:border-zinc-800/80"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Agent failures</div>
+                        <div className="mt-0.5 text-[11px] text-zinc-500 tabular-nums">
+                          {nf(Number(data.ops.agentRuns.failed24h ?? 0))} failed
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[11px] text-zinc-500">Last run</div>
+                        <div className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
+                          {data.ops.agentRuns.lastRun
+                            ? `${data.ops.agentRuns.lastRun.agentKey} • ${data.ops.agentRuns.lastRun.status}`
+                            : "—"}
+                        </div>
+                      </div>
+                    </div>
+                  </a>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </section>
 
       <section className="mt-6 grid grid-cols-1 lg:grid-cols-4 gap-4">
@@ -1259,6 +1262,7 @@ export default async function DashboardHome({
             title="Findings report"
             description={`${data.rangeLabel} published volume (current vs previous period).`}
             border={false}
+            className="px-4 py-3"
             right={
               <div className="flex items-center gap-2">
                 <div className="hidden sm:flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-black/20 p-1">
@@ -1288,11 +1292,11 @@ export default async function DashboardHome({
               </div>
             }
           />
-          <CardContent className="pt-2">
-            <DualLineChart primary={data.trend.current} secondary={data.trend.previous} height={260} />
+          <CardContent className="px-4 pt-2 pb-3">
+            <DualLineChart primary={data.trend.current} secondary={data.trend.previous} height={230} showRangeLabels={false} />
             {typeof data.trend.changePct === "number" ? (
               <div
-                className="mt-2 text-[11px] text-zinc-500"
+                className="mt-1 text-[11px] text-zinc-500"
                 title="Percent change vs previous period: (current - previous) / previous. Hidden when previous is 0."
               >
                 Period change: <span className="tabular-nums">{Math.round(data.trend.changePct)}%</span>

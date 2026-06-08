@@ -18,10 +18,12 @@ export function DualLineChart({
   primary,
   secondary,
   height = 240,
+  showRangeLabels = true,
 }: {
   primary: LineDatum[];
   secondary?: LineDatum[];
   height?: number;
+  showRangeLabels?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [hover, setHover] = useState<null | { idx: number; xPx: number; yPx: number }>(null);
@@ -182,11 +184,12 @@ export function DualLineChart({
         </div>
       ) : null}
 
-      <div className="mt-2 flex items-center text-[11px] text-zinc-600 dark:text-zinc-400">
-        <span className="tabular-nums flex-1">{primary[0]?.label ?? ""}</span>
-        <span className="tabular-nums flex-1 text-right">{primary[primary.length - 1]?.label ?? ""}</span>
-      </div>
+      {showRangeLabels ? (
+        <div className="mt-2 flex items-center text-[11px] text-zinc-600 dark:text-zinc-400">
+          <span className="tabular-nums flex-1">{primary[0]?.label ?? ""}</span>
+          <span className="tabular-nums flex-1 text-right">{primary[primary.length - 1]?.label ?? ""}</span>
+        </div>
+      ) : null}
     </div>
   );
 }
-

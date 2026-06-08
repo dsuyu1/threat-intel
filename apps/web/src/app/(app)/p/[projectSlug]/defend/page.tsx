@@ -35,8 +35,8 @@ export default async function DefendPage({
   if (!access) {
     return (
       <div className="max-w-[90ch] mx-auto px-8 py-12">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">Defend heatmap</h1>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Defend heatmap is available on Pro.</p>
+        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">MITRE matrix map</h1>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">MITRE matrix map is available on Pro.</p>
       </div>
     );
   }
@@ -48,10 +48,10 @@ export default async function DefendPage({
   return (
     <div className="max-w-[90ch] mx-auto px-8 py-10">
       <div>
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">Defend heatmap</h1>
+        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">MITRE matrix map</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           ATT&CK Enterprise technique heatmap scored by findings mentions. Click a technique to see ATT&CK mitigations
-          and related MITRE D3FEND countermeasures.
+          and mapped MITRE D3FEND countermeasures.
         </p>
       </div>
 

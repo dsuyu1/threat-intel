@@ -120,11 +120,11 @@ export function DefendHeatmap({
       <div className="flex items-end justify-between gap-6">
         <div>
           <h2 className="text-sm font-semibold tracking-wide uppercase text-zinc-600 dark:text-zinc-400">
-            Defend heatmap
+            MITRE matrix map
           </h2>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
             Techniques are colored by mentions in the last <span className="tabular-nums">{nf(days)}</span> days.
-            Click a technique to see mitigations and D3FEND countermeasures.
+            Click a technique to see mitigations and mapped D3FEND countermeasures.
           </p>
         </div>
         <div className="text-xs text-zinc-500 dark:text-zinc-400">

@@ -12,6 +12,8 @@ import {
   KeyRound,
   LandPlot,
   LayoutDashboard,
+  LocateFixed,
+  Map,
   Network,
   Radar,
   Radiation,
@@ -44,6 +46,7 @@ export const PLATFORM_NAV_SECTIONS: PlatformNavSection[] = [
       { label: "Dashboard", href: "/", icon: LayoutDashboard },
       { label: "Global view", href: "/global", icon: Earth },
       { label: "Learn", href: "/learn", icon: GraduationCap },
+      { label: "MITRE matrix map", href: "/defend", icon: Map },
     ],
   },
   {
@@ -52,7 +55,7 @@ export const PLATFORM_NAV_SECTIONS: PlatformNavSection[] = [
       { label: "Findings", href: "/findings", icon: Radar },
       { label: "Threat actor library", href: "/actors", icon: UsersRound },
       { label: "Navigator", href: "/navigator", icon: Compass },
-      { label: "IOCs", href: "/iocs", icon: Radiation },
+      { label: "IOCs", href: "/iocs", icon: LocateFixed },
     ],
   },
   {

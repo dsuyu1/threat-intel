@@ -1257,7 +1257,7 @@ export default async function DashboardHome({
       </section>
 
       <section className="mt-6 grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <Card className="lg:col-span-3 shadow-sm dark:shadow-black/30">
+        <Card className="lg:col-span-3 self-start shadow-sm dark:shadow-black/30">
           <CardHeader
             title="Findings report"
             description={`${data.rangeLabel} published volume (current vs previous period).`}
@@ -1283,6 +1283,21 @@ export default async function DashboardHome({
                     );
                   })}
                 </div>
+
+                {typeof data.trend.changePct === "number" ? (
+                  <div
+                    className={`hidden sm:inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium tabular-nums ${
+                      data.trend.changePct >= 0
+                        ? "border-emerald-200/70 dark:border-emerald-900/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                        : "border-rose-200/70 dark:border-rose-900/50 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+                    }`}
+                    title="Percent change vs previous period: (current - previous) / previous. Hidden when previous is 0."
+                  >
+                    <span aria-hidden="true">{data.trend.changePct >= 0 ? "↑" : "↓"}</span>
+                    <span className="ml-1">{Math.round(data.trend.changePct)}%</span>
+                  </div>
+                ) : null}
+
                 <a
                   href="/findings"
                   className="inline-flex items-center rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-black/30 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-white dark:hover:bg-black/40"
@@ -1292,16 +1307,17 @@ export default async function DashboardHome({
               </div>
             }
           />
-          <CardContent className="px-4 pt-2 pb-3">
-            <DualLineChart primary={data.trend.current} secondary={data.trend.previous} height={230} showRangeLabels={false} />
-            {typeof data.trend.changePct === "number" ? (
-              <div
-                className="mt-1 text-[11px] text-zinc-500"
-                title="Percent change vs previous period: (current - previous) / previous. Hidden when previous is 0."
-              >
-                Period change: <span className="tabular-nums">{Math.round(data.trend.changePct)}%</span>
-              </div>
-            ) : null}
+          <CardContent dense className="pt-2 pb-2">
+            <DualLineChart
+              primary={data.trend.current}
+              secondary={data.trend.previous}
+              height={210}
+              showRangeLabels={false}
+              showEndpointLabelsInChart
+              xLabel={data.range.endsWith("m") ? "Month" : "Day"}
+              yLabel="Findings"
+              showYAxisTickLabels
+            />
           </CardContent>
         </Card>
 
@@ -1377,12 +1393,12 @@ export default async function DashboardHome({
               <DonutChart
                 title="Finding severity mix"
                 segments={[
-                  { label: "Critical", value: Number(data.mix.severity.critical ?? 0), color: "rgb(244 63 94)" },
-                  { label: "High", value: Number(data.mix.severity.high ?? 0), color: "rgb(249 115 22)" },
-                  { label: "Medium", value: Number(data.mix.severity.medium ?? 0), color: "rgb(245 158 11)" },
-                  { label: "Low", value: Number(data.mix.severity.low ?? 0), color: "rgb(16 185 129)" },
-                  { label: "Info", value: Number(data.mix.severity.info ?? 0), color: "rgb(14 165 233)" },
-                  { label: "Unscored", value: Number(data.mix.severity.unscored ?? 0), color: "rgb(113 113 122)" },
+                  { label: "Critical", value: Number(data.mix.severity.critical ?? 0), color: "rgb(244 63 94)", href: "/findings?band=critical" },
+                  { label: "High", value: Number(data.mix.severity.high ?? 0), color: "rgb(249 115 22)", href: "/findings?band=high" },
+                  { label: "Medium", value: Number(data.mix.severity.medium ?? 0), color: "rgb(245 158 11)", href: "/findings?band=medium" },
+                  { label: "Low", value: Number(data.mix.severity.low ?? 0), color: "rgb(16 185 129)", href: "/findings?band=low" },
+                  { label: "Info", value: Number(data.mix.severity.info ?? 0), color: "rgb(14 165 233)", href: "/findings?band=unscored" },
+                  { label: "Unscored", value: Number(data.mix.severity.unscored ?? 0), color: "rgb(113 113 122)", href: "/findings?band=unscored" },
                 ]}
               />
             </CardContent>

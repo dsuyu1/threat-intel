@@ -96,7 +96,7 @@ export function SparkBars({
   );
 }
 
-type DonutSegment = { label: string; value: number; color: string };
+type DonutSegment = { label: string; value: number; color: string; href?: string };
 
 export function DonutChart({
   title,
@@ -125,9 +125,8 @@ export function DonutChart({
         {segments.map((s) => {
           const pct = (s.value / total) * 100;
           const dash = `${pct} ${100 - pct}`;
-          const el = (
+          const circle = (
             <circle
-              key={s.label}
               cx="21"
               cy="21"
               r="15.915"
@@ -137,10 +136,22 @@ export function DonutChart({
               strokeDasharray={dash}
               strokeDashoffset={offset}
               strokeLinecap="butt"
+              className={s.href ? "cursor-pointer hover:opacity-85" : undefined}
             />
           );
           offset -= pct;
-          return el;
+          const label = `${s.label}: ${s.value}`;
+          return s.href ? (
+            <a key={s.label} href={s.href} aria-label={label}>
+              <title>{label}</title>
+              {circle}
+            </a>
+          ) : (
+            <g key={s.label}>
+              <title>{label}</title>
+              {circle}
+            </g>
+          );
         })}
         {rawTotal === 0 ? (
           <text
@@ -167,14 +178,26 @@ export function DonutChart({
               .sort((a, b) => b.value - a.value)
               .map((s) => (
                 <div key={s.label} className="flex items-center gap-2 text-sm">
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ background: s.color }}
-                  />
-                  <span className="text-zinc-800 dark:text-zinc-200">{s.label}</span>
-                  <span className="ml-auto tabular-nums text-zinc-600 dark:text-zinc-400">
-                    {s.value}
-                  </span>
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
+                  {s.href ? (
+                    <a
+                      href={s.href}
+                      className="flex min-w-0 flex-1 items-center gap-2 hover:underline"
+                      aria-label={`Open ${s.label} findings`}
+                    >
+                      <span className="truncate text-zinc-800 dark:text-zinc-200">{s.label}</span>
+                      <span className="ml-auto tabular-nums text-zinc-600 dark:text-zinc-400">
+                        {s.value}
+                      </span>
+                    </a>
+                  ) : (
+                    <>
+                      <span className="text-zinc-800 dark:text-zinc-200">{s.label}</span>
+                      <span className="ml-auto tabular-nums text-zinc-600 dark:text-zinc-400">
+                        {s.value}
+                      </span>
+                    </>
+                  )}
                 </div>
               ))
           ) : (

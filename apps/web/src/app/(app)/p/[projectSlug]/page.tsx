@@ -1177,9 +1177,82 @@ export default async function DashboardHome({
         />
       </section>
 
-      <section className="mt-6">
-        <div className="flex justify-stretch lg:justify-end">
-          <Card className="w-full lg:w-[420px] xl:w-[460px] shadow-sm dark:shadow-black/30">
+      <section className="mt-6 grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <div className="lg:col-span-3 space-y-4">
+          <Card className="shadow-sm dark:shadow-black/30">
+            <CardHeader
+              title="Findings report"
+              description={`${data.rangeLabel} published volume (current vs previous period).`}
+              border={false}
+              className="px-4 py-3"
+              right={
+                <div className="flex items-center gap-2">
+                  <div className="hidden sm:flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-black/20 p-1">
+                    {tabs.map((t) => {
+                      const active = t.id === data.range;
+                      return (
+                        <a
+                          key={t.id}
+                          href={buildHref(`/p/${p.projectSlug}`, currentHref, { range: t.id })}
+                          className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
+                            active
+                              ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                              : "text-zinc-600 dark:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/5"
+                          }`}
+                        >
+                          {t.label}
+                        </a>
+                      );
+                    })}
+                  </div>
+
+                  {typeof data.trend.changePct === "number" ? (
+                    <div
+                      className={`hidden sm:inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium tabular-nums ${
+                        data.trend.changePct >= 0
+                          ? "border-emerald-200/70 dark:border-emerald-900/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                          : "border-rose-200/70 dark:border-rose-900/50 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+                      }`}
+                      title="Percent change vs previous period: (current - previous) / previous. Hidden when previous is 0."
+                    >
+                      <span aria-hidden="true">{data.trend.changePct >= 0 ? "↑" : "↓"}</span>
+                      <span className="ml-1">{Math.round(data.trend.changePct)}%</span>
+                    </div>
+                  ) : null}
+
+                  <a
+                    href="/findings"
+                    className="inline-flex items-center rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-black/30 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-white dark:hover:bg-black/40"
+                  >
+                    Open feed
+                  </a>
+                </div>
+              }
+            />
+            <CardContent dense className="pt-2 pb-2">
+              <DualLineChart
+                primary={data.trend.current}
+                secondary={data.trend.previous}
+                height={210}
+                showRangeLabels={false}
+                showEndpointLabelsInChart
+                xLabel={data.range.endsWith("m") ? "Month" : "Day"}
+                yLabel="Findings"
+                showYAxisTickLabels
+              />
+            </CardContent>
+          </Card>
+
+          <IncidentMetricsCard
+            schemaReady={data.incidentMetrics.schemaReady}
+            rangeLabel={data.rangeLabel}
+            metrics={data.incidentMetrics.metrics}
+            effectiveness={data.incidentMetrics.effectiveness}
+          />
+        </div>
+
+        <div className="space-y-4">
+          <Card className="shadow-sm dark:shadow-black/30">
             <CardHeader
               dense
               title="Ops health"
@@ -1253,75 +1326,7 @@ export default async function DashboardHome({
               )}
             </CardContent>
           </Card>
-        </div>
-      </section>
 
-      <section className="mt-6 grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <Card className="lg:col-span-3 self-start shadow-sm dark:shadow-black/30">
-          <CardHeader
-            title="Findings report"
-            description={`${data.rangeLabel} published volume (current vs previous period).`}
-            border={false}
-            className="px-4 py-3"
-            right={
-              <div className="flex items-center gap-2">
-                <div className="hidden sm:flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-black/20 p-1">
-                  {tabs.map((t) => {
-                    const active = t.id === data.range;
-                    return (
-                      <a
-                        key={t.id}
-                        href={buildHref(`/p/${p.projectSlug}`, currentHref, { range: t.id })}
-                        className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
-                          active
-                            ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                            : "text-zinc-600 dark:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/5"
-                        }`}
-                      >
-                        {t.label}
-                      </a>
-                    );
-                  })}
-                </div>
-
-                {typeof data.trend.changePct === "number" ? (
-                  <div
-                    className={`hidden sm:inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium tabular-nums ${
-                      data.trend.changePct >= 0
-                        ? "border-emerald-200/70 dark:border-emerald-900/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                        : "border-rose-200/70 dark:border-rose-900/50 bg-rose-500/10 text-rose-700 dark:text-rose-300"
-                    }`}
-                    title="Percent change vs previous period: (current - previous) / previous. Hidden when previous is 0."
-                  >
-                    <span aria-hidden="true">{data.trend.changePct >= 0 ? "↑" : "↓"}</span>
-                    <span className="ml-1">{Math.round(data.trend.changePct)}%</span>
-                  </div>
-                ) : null}
-
-                <a
-                  href="/findings"
-                  className="inline-flex items-center rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-black/30 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-white dark:hover:bg-black/40"
-                >
-                  Open feed
-                </a>
-              </div>
-            }
-          />
-          <CardContent dense className="pt-2 pb-2">
-            <DualLineChart
-              primary={data.trend.current}
-              secondary={data.trend.previous}
-              height={210}
-              showRangeLabels={false}
-              showEndpointLabelsInChart
-              xLabel={data.range.endsWith("m") ? "Month" : "Day"}
-              yLabel="Findings"
-              showYAxisTickLabels
-            />
-          </CardContent>
-        </Card>
-
-        <div className="space-y-4">
           <Card className="shadow-sm dark:shadow-black/30">
             <CardHeader
               title="Risk trend"
@@ -1404,16 +1409,6 @@ export default async function DashboardHome({
             </CardContent>
           </Card>
         </div>
-
-         <div className="lg:col-span-4">
-           <IncidentMetricsCard
-             schemaReady={data.incidentMetrics.schemaReady}
-             rangeLabel={data.rangeLabel}
-             metrics={data.incidentMetrics.metrics}
-             effectiveness={data.incidentMetrics.effectiveness}
-           />
-         </div>
-
       </section>
 
       <section className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">

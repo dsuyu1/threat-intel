@@ -1,6 +1,4 @@
-export const runtime = "nodejs";
-
-import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
+export const runtime = "edge";
 
 import { getDb, agentRuns, customAgents, userAiKeys } from "@ti/db";
 import { and, eq } from "drizzle-orm";
@@ -17,6 +15,13 @@ function json(data: unknown, init?: ResponseInit) {
 
 function isSystemAgentKey(v: string): v is SystemAgentKey {
   return SYSTEM_AGENTS.some((a) => a.key === v);
+}
+
+function readEnv(name: string): string | null {
+  const raw = (globalThis as any)?.process?.env?.[name];
+  if (typeof raw !== "string") return null;
+  const v = raw.trim();
+  return v ? v : null;
 }
 
 async function ensureAgentTablesExist() {
@@ -58,33 +63,25 @@ async function ensureCustomAgentAccess(params: { customAgentId: string; viewer: 
   return { ok: true as const };
 }
 
-function awsRegion() {
-  const region = String(process.env["AWS_REGION"] ?? process.env["AWS_DEFAULT_REGION"] ?? "").trim();
-  return region || null;
-}
-
-function onDemandFunctionName() {
-  const name = String(process.env["AGENTS_ON_DEMAND_LAMBDA_NAME"] ?? process.env["AGENTS_ON_DEMAND_LAMBDA_ARN"] ?? "").trim();
-  return name || null;
+function onDemandUrl() {
+  return readEnv("AGENTS_ON_DEMAND_URL");
 }
 
 async function enqueueOnDemandRun(payload: unknown) {
-  const region = awsRegion();
-  const functionName = onDemandFunctionName();
-  if (!region) throw new Error("AWS_REGION is not set");
-  if (!functionName) throw new Error("AGENTS_ON_DEMAND_LAMBDA_NAME is not set");
+  const url = onDemandUrl();
+  if (!url) {
+    throw new Error("AGENTS_ON_DEMAND_URL is not set (required on Cloudflare/Edge deployments)");
+  }
 
-  const client = new LambdaClient({ region });
-  const res = await client.send(
-    new InvokeCommand({
-      FunctionName: functionName,
-      InvocationType: "Event",
-      Payload: Buffer.from(JSON.stringify(payload), "utf8"),
-    })
-  );
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 
-  if (typeof res.StatusCode === "number" && res.StatusCode >= 200 && res.StatusCode < 300) return;
-  throw new Error(`Lambda invoke failed (status=${res.StatusCode ?? "unknown"})`);
+  if (res.ok) return;
+  const text = await res.text().catch(() => "");
+  throw new Error(`On-demand enqueue failed (${res.status}): ${text.slice(0, 500)}`);
 }
 
 async function markRunFailed(params: { runId: string; startedAt: Date; err: unknown }) {

@@ -1,0 +1,92 @@
+---
+title: "Running agents"
+section: "Getting Started"
+description: "Execute agents to extract entities and generate findings from your data."
+order: 2
+lastUpdated: "2026-06-07"
+---
+
+# Running agents
+
+Agents turn your connected data into structured outputs: findings, entities, relationships, risk entries, and detections.
+
+If the UI looks empty, it’s almost always because **agents haven’t run** (or ran with no usable inputs).
+
+## What each agent does (quick mental model)
+
+### TTP agent
+
+Syncs MITRE ATT&amp;CK from STIX and updates the knowledge graph (actors, techniques, mitigations). This is a **no-AI** agent.
+
+### Threat feed (RSS) agent
+
+Ingests enabled RSS feeds into **Documents**, then uses AI extraction to turn reports into graph updates (actors, sectors, CVEs, techniques) with citations.
+
+### Vulnerability (CVE) agent
+
+Fetches recent CVEs + CISA KEV, summarizes with AI, and writes **Findings** (plus CVE entities used across the product).
+
+### IOC agent
+
+Imports IOCs from TAXII feeds into the IOC store, then optionally enriches indicators (depends on configured enrichment keys).
+
+## How schedules work
+
+In production, agents run on AWS Lambda and are scheduled by **EventBridge**.
+Default cadences (from `apps/agents/serverless.yml`):
+
+- CVE agent: every 6 hours
+- Threat feed agent: every 4 hours
+- Exploit agent: every 2 hours
+- TTP agent: weekly (Sunday 06:00 UTC)
+- IOC TAXII import: every 30 minutes
+- IOC enrichment: every 10 minutes
+- Detections agent: every 15 minutes
+
+<Callout type="note">
+Schedules keep the platform up-to-date, but they don’t help you during onboarding. For onboarding, trigger an on-demand run.
+</Callout>
+
+## Trigger an on-demand run from the UI
+
+1. Open **Agents** (`/agents`).
+2. Find the agent you want.
+3. Click **Run now**.
+
+You’ll see the run appear under **Recent activity**. Use the “view output” link to debug.
+
+## “No output” vs “agent ran but nothing matched”
+
+- **No output** can mean:
+  - The agent didn’t have inputs (no sources/integrations configured, or sources disabled)
+  - The agent required an API key and couldn’t do AI extraction/enrichment
+- **Ran but nothing matched** usually means:
+  - The inputs were valid, but there were no new CVEs/feed items/IOCs since the last run
+
+When in doubt, check:
+
+- **Sources** (`/data/sources`) and **Documents** (`/data/documents`) for ingestion health
+- The agent run output page (from `/agents`)
+
+## BYOK API keys (important)
+
+Many agents use an AI provider key to summarize or extract structured intel.
+If you don’t configure a key, AI-powered agents may run but produce minimal output.
+
+Set your key in **Agents → Your API key** (`/agents`).
+
+Typical AI-powered agents:
+
+- CVE agent (summaries)
+- Threat feed agent (extraction + embeddings)
+- Detections agent (rule generation)
+
+<Callout type="note">
+Seeing “no data” in charts or graphs usually means agents haven’t produced outputs yet, or there aren’t sources connected.
+</Callout>
+
+## Common first runs (recommended)
+
+- Run the **CVE agent** to populate findings.
+- Run the **Threat feed agent** to ingest RSS into documents and extract graph links.
+- Run the **TTP agent** to populate the base ATT&amp;CK graph.

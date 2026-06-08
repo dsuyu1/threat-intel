@@ -1,0 +1,63 @@
+---
+title: "Agents reference"
+section: "Reference"
+description: "System agents, what they do, schedules, and configuration."
+order: 4
+lastUpdated: "2026-06-07"
+---
+
+# Agents reference
+
+This is the “what exists” companion to the concepts page.
+
+Start here for day-to-day operations: [`/agents`](/agents)
+
+## System agents (high level)
+
+The platform includes system agents such as:
+
+- **CVE agent** (`vuln`): CVEs + KEV → findings
+- **Threat feed agent** (`attack`): RSS → documents + AI extraction → findings + graph
+- **TTP agent** (`ttp`): MITRE ATT&amp;CK STIX → graph (no AI)
+- **Exploit agent** (`exploit`): PoC signals → findings
+- **Malware agent** (`malware`): malware updates → findings
+- **Vuln scanner sync** (`vuln-scanners`): Tenable/Qualys/Rapid7 → exposure tables
+- **TheHive sync** (`thehive`): cases → incidents
+- **Navigator** (`navigator`): recompute scenarios
+- **Detections** (`detections`): generate Sigma/KQL/SPL detections
+- **IOC TAXII import** (`ioc-taxii`): TAXII → IOCs
+- **IOC enrich** (`ioc-enrich`): enrichment jobs → IOC context
+- **Merge agent** (`merge`): apply accepted KG merges
+
+## Default schedules
+
+In production, schedules are configured via AWS EventBridge (see `apps/agents/serverless.yml`).
+Common defaults:
+
+- `vuln`: every 6 hours
+- `attack`: every 4 hours
+- `exploit`: every 2 hours
+- `ttp`: weekly (Sun 06:00 UTC)
+- `ioc-taxii`: every 30 minutes
+- `ioc-enrich`: every 10 minutes
+- `detections`: every 15 minutes
+- `malware`: every 12 hours
+
+## Configuration and secrets
+
+### BYOK AI keys
+
+AI-powered agents need an AI provider key (stored per user/project).
+Configure it in **Agents → Your API key** (`/agents`).
+
+### Agent service environment (self-hosted / dev)
+
+When running agents locally or self-hosting, you may need:
+
+- `DATABASE_URL` (Postgres)
+- `TI_SECRETS_KEY` (encryption key for stored secrets)
+- `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `AI_PROVIDER` / `AI_MODEL` (AI runtime)
+- `NVD_API_KEY` (optional, improves NVD API reliability)
+
+Exact requirements vary by agent and integration.
+

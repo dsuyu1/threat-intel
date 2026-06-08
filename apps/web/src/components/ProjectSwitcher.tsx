@@ -60,7 +60,9 @@ export function ProjectSwitcher() {
     };
   }, [pathProjectSlug]);
 
-  const currentSlug = data?.project.slug ?? pathProjectSlug ?? "";
+  // Use a stable fallback ("default") so the controlled <select> always has a matching <option>
+  // during SSR + hydration (avoids browser default-selection drift).
+  const currentSlug = data?.project.slug ?? pathProjectSlug ?? "default";
 
   const onSelect = async (nextSlug: string) => {
     const slug = String(nextSlug ?? "").trim();

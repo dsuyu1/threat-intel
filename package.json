@@ -3,9 +3,13 @@
   "private": true,
   "scripts": {
     "dev": "turbo run dev --filter=web",
+    "dev:clean": "turbo run dev:clean --filter=web",
     "build": "turbo run build",
     "db:generate": "turbo run db:generate",
     "db:migrate": "pnpm --filter @ti/db db:migrate",
+    "run:ttp": "pnpm --filter agents run:ttp",
+    "run:attack": "pnpm --filter agents run:attack",
+    "run:vuln": "pnpm --filter agents run:vuln",
     "agents:run": "pnpm --filter agents run:all",
     "lint": "turbo run lint",
     "test": "vitest run",

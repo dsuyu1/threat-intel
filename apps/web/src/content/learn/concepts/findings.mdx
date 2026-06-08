@@ -1,0 +1,51 @@
+---
+title: "Findings"
+section: "Concepts"
+description: "Agent outputs you triage: CVEs, exploit signals, threat reports, and malware updates."
+order: 4
+lastUpdated: "2026-06-07"
+---
+
+# Findings
+
+A **finding** is a unit of agent output you can triage, filter, and query.
+Findings are separate from the [knowledge graph](/learn/concepts/knowledge-graph): they’re time-oriented “what happened / what matters” items.
+
+## What a finding typically contains
+
+Depending on the agent, a finding may include:
+
+- **Title + summary** (often AI-generated)
+- **Agent** that produced it (CVE, threat feed, exploit, malware, …)
+- **Severity** signals (e.g. severity, CVSS)
+- **Exploitation likelihood** signals (e.g. EPSS)
+- **Pointers** to entities (e.g. `cveId`, `mitreIds`)
+- **Source URL/title** for traceability
+
+## How findings relate to the graph
+
+Findings can:
+
+- Reference entities (a CVE, a technique id, an actor name)
+- Add context that later becomes relationships in the knowledge graph (when evidence supports it)
+
+In other words:
+
+- **Findings** are “items to review”
+- The **graph** is “the connected model of everything”
+
+## Why you might see no findings
+
+- No sources are enabled (so there’s nothing to ingest)
+- Agents haven’t run yet
+- Your project has no integrations (scanner feeds, RSS, STIX, etc.)
+
+<Callout type="note">
+If you’re just getting started, connect sources first, then run agents.
+</Callout>
+
+Start here:
+
+- [Connecting data](/learn/getting-started/connecting-data)
+- [Running agents](/learn/getting-started/running-agents)
+

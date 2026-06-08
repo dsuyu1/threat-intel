@@ -1,0 +1,43 @@
+---
+title: "Playbooks"
+section: "Concepts"
+description: "Playbook lifecycle, AI generation inputs, and post-incident reviews."
+order: 9
+lastUpdated: "2026-06-07"
+proOnly: true
+---
+
+# Playbooks
+
+Playbooks are incident-response runbooks generated and managed inside the platform.
+They’re optimized for “what do we do next?” during an incident.
+
+## Lifecycle: draft → approved → archived
+
+- **Draft**: generated (or edited) but not yet the authoritative version
+- **Approved**: reviewed and ready to run during an incident
+- **Archived**: kept for history but not actively used
+
+## How AI generates playbooks (what it uses as input)
+
+AI-generated drafts can use context like:
+
+- The actor / scenario context (when created from Navigator)
+- Relevant techniques (TTPs)
+- Your stack and integrations
+- A triggering finding (when created from a specific finding)
+
+## Post-incident review (PIR)
+
+After an incident, you can run a post-incident review to:
+
+- Record what happened
+- Measure time-to-detect/respond/contain
+- Capture what worked vs what didn’t
+- Feed improvements back into detections and controls
+
+## Playbooks vs detections (different tools)
+
+- **Detections**: “How do we catch this technique in telemetry?”
+- **Playbooks**: “When it happens, what steps do we take to respond?”
+

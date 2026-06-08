@@ -1,0 +1,85 @@
+---
+title: "Agents"
+section: "Concepts"
+description: "What agents read/write, how schedules work, and how to debug runs."
+order: 7
+lastUpdated: "2026-06-07"
+---
+
+# Agents
+
+Agents are the platform’s “workers”. They turn external inputs (feeds, CVE catalogs, TAXII, integrations) into:
+
+- **Documents** (fetched artifacts)
+- **Findings** (triage items)
+- **Knowledge graph updates** (entities, relations, evidence)
+- (Pro) **Navigator** outputs (scenarios, detections, risk entries)
+
+## The core five agents (what each reads/writes)
+
+### CVE agent
+
+Reads: NVD CVEs + CISA KEV  
+Writes: `findings (agent=vuln)` and CVE entities used across the product
+
+### Threat feed agent (RSS)
+
+Reads: enabled RSS sources  
+Writes: `documents`, `findings (agent=attack)`, and graph relationships with citations
+
+### TTP agent (MITRE ATT&CK)
+
+Reads: a STIX bundle URL (defaults to MITRE ATT&amp;CK Enterprise STIX)  
+Writes: the base knowledge graph (`kg_entities`, `kg_relations`)  
+AI cost: **none**
+
+### IOC TAXII import agent
+
+Reads: configured TAXII connections (per-project)  
+Writes: `iocs` and `ioc_sources`
+
+### Detections agent
+
+Reads: validated technique scenarios + pending detection jobs  
+Writes: `navigator_detections` (Sigma/KQL/SPL rules)
+
+<Callout type="tip">
+There are additional system agents (exploit, malware, scanner sync, TheHive sync, merges, etc.). Use the in-app Agents page for the full list.
+</Callout>
+
+## Schedules vs on-demand
+
+- **Scheduled** runs keep the platform continuously up-to-date (AWS EventBridge → Lambda).
+- **On-demand** runs are for onboarding and debugging.
+
+Trigger on-demand runs from [`/agents`](/agents) using **Run now**.
+
+## BYOK API keys (why “nothing happened”)
+
+Some agents require an AI provider key to do summaries or extraction.
+
+- Without a key, an agent may still “run”, but skip AI steps and produce minimal output.
+- The TTP agent is intentionally **no-AI** (it parses ATT&amp;CK STIX directly).
+
+Agents that commonly require an AI key:
+
+- CVE agent (`vuln`) — summaries
+- Threat feed agent (`attack`) — extraction + embeddings
+- Detections agent (`detections`) — rule generation
+- Custom agents — whatever you build (often AI-driven)
+
+Configure your key in **Agents → Your API key** (`/agents`).
+
+## Debugging primitives: agentRuns and agentRunEvents
+
+When you click **Run now**, the platform creates an **agent run** record:
+
+- `agentRuns`: one row per run (status, timings, metrics, errors)
+- `agentRunEvents`: an append-only event stream used for “what happened” debugging
+
+In the UI, start at **Agents → Recent activity**, then open a run’s output page.
+
+## Why the threat feed agent costs more than the TTP agent
+
+- **TTP**: parse known structured STIX → deterministic transforms → graph updates.
+- **Threat feed**: ingest free-form text → chunk/embed → AI extraction → evidence + graph writes.

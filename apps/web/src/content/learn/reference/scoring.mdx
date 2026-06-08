@@ -1,0 +1,54 @@
+---
+title: "Scoring reference"
+section: "Reference"
+description: "CVSS bands, EPSS interpretation, KEV definition, and exploitation signals."
+order: 5
+lastUpdated: "2026-06-07"
+---
+
+# Scoring reference
+
+This page explains the scoring signals you’ll see on findings and risk screens.
+
+## CVSS → bands
+
+The Findings UI groups items into a band for fast triage:
+
+- **Actively exploited / KEV**: tagged `kev` or `actively-exploited`
+- **Critical**: CVSS ≥ 9.0
+- **High**: CVSS 7.0–8.9
+- **Medium**: CVSS 4.0–6.9
+- **Low**: CVSS &lt; 4.0
+- **Unscored**: no CVSS
+
+## EPSS (FIRST.org)
+
+EPSS is a probability-of-exploitation score:
+
+- `epssScore`: 0–1 probability
+- `epssPercentile`: 0–1 percentile
+
+Interpretation tips:
+
+- EPSS helps answer “what’s likely to be exploited soon/in the wild?”
+- CVSS helps answer “how bad is it if exploited?”
+- KEV helps answer “is it known to be exploited right now?”
+
+## KEV (Known Exploited Vulnerabilities)
+
+KEV refers to CVEs listed in CISA’s Known Exploited Vulnerabilities catalog.
+The platform tags these findings with `kev` and prioritizes them.
+
+## “Actively exploited” vs KEV
+
+- **KEV** is a specific curated list.
+- **Actively exploited** is a broader signal that may come from multiple sources (agent tagging, threat reports, etc.).
+
+## PoC signals
+
+PoC-related fields and tags:
+
+- `pocUrl`: proof-of-concept URL
+- `pocLevel`: `poc|functional|itw`
+- `githubpoc` tag: PoC discovered on GitHub
+

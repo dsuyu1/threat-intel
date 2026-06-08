@@ -47,6 +47,7 @@ export async function startRun(params: {
       kind: (params.kind ?? "system") as any,
       projectId,
       userId: params.userId ?? undefined,
+      systemRun: params.userId == null,
       customAgentId: params.customAgentId ?? undefined,
       status: "running" as any,
       startedAt: new Date(),

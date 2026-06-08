@@ -11,11 +11,12 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import { resolve as resolvePath } from "node:path";
 import Parser from "rss-parser";
-import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { getDb, docChunks, documents, sources, type Source } from "@ti/db";
 import { embedTexts, generateText } from "../lib/openai.js";
 import { chunkText, cleanHtmlToText } from "../lib/text.js";
 import { ensureDefaultSources, getEnabledSources } from "../lib/sources.js";
+import { computeAndPersistSourceReliability } from "../lib/source-reliability.js";
 import {
   ensureKgEntity,
   ensureKgEntityIfMissing,
@@ -236,12 +237,27 @@ async function upsertDocument(params: {
   cleanText: string | null;
   status: "ok" | "error";
   error?: string | null;
+  sourceId?: string | null;
 }): Promise<string> {
   const db = getDb();
   const contentHash = crypto
     .createHash("sha256")
     .update(params.cleanText ?? params.error ?? params.url)
     .digest("hex");
+
+  const set: Record<string, unknown> = {
+    title: params.title,
+    publishedAt: params.publishedAt,
+    fetchedAt: new Date(),
+    contentHash,
+    cleanText: params.cleanText,
+    status: params.status,
+    error: params.error ?? null,
+  };
+
+  if (params.sourceId) {
+    set["sourceId"] = sql`COALESCE(${documents.sourceId}, ${params.sourceId})`;
+  }
 
   const inserted = await db
     .insert(documents)
@@ -253,17 +269,12 @@ async function upsertDocument(params: {
       cleanText: params.cleanText,
       status: params.status,
       error: params.error ?? null,
+      sourceId: params.sourceId ?? null,
     })
     .onConflictDoUpdate({
       target: [documents.url],
       set: {
-        title: params.title,
-        publishedAt: params.publishedAt,
-        fetchedAt: new Date(),
-        contentHash,
-        cleanText: params.cleanText,
-        status: params.status,
-        error: params.error ?? null,
+        ...(set as any),
       },
     })
     .returning({ id: documents.id });
@@ -350,6 +361,7 @@ export async function runAttackAgent() {
         publishedAt: publishedAtSafe,
         cleanText,
         status: "ok",
+        sourceId: null,
       });
 
       let chunks: Array<{ index: number; text: string }> = [];
@@ -619,6 +631,7 @@ export async function runAttackAgent() {
           cleanText: null,
           status: "error",
           error: String(err),
+          sourceId: src.id,
         });
         if (docId) {
           await markDocumentError(docId, err);
@@ -632,6 +645,7 @@ export async function runAttackAgent() {
         publishedAt: publishedAtSafe,
         cleanText,
         status: "ok",
+        sourceId: src.id,
       });
 
       let chunks: Array<{ index: number; text: string }> = [];
@@ -839,6 +853,21 @@ export async function runAttackAgent() {
 
     if (disableAiForRun && budget.maxNewDocs != null && budget.usedNewDocs >= budget.maxNewDocs) {
       break;
+    }
+  }
+
+  if (process.env["SOURCE_RELIABILITY_DISABLE"] !== "1") {
+    try {
+      const res = await computeAndPersistSourceReliability();
+      if (res.ok) {
+        console.log(
+          `[AttackAgent] Source reliability computed: ${res.computed} snapshot(s), ${res.updated} source(s) updated.`
+        );
+      } else {
+        console.log(`[AttackAgent] Source reliability skipped (${res.reason}).`);
+      }
+    } catch (err) {
+      console.warn("[AttackAgent] Source reliability compute failed:", err);
     }
   }
 

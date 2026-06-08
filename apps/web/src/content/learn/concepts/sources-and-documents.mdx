@@ -1,0 +1,56 @@
+---
+title: "Sources & documents"
+section: "Concepts"
+description: "Where data comes from (sources) and the raw material agents operate on (documents)."
+order: 5
+lastUpdated: "2026-06-07"
+---
+
+# Sources & documents
+
+Most empty-state confusion comes from mixing up these two ideas:
+
+- A **source** is a configured input (RSS feed, STIX/TAXII endpoint, scanner integration, …).
+- A **document** is a fetched artifact (a web page, a feed item, a blob of text) that agents process and cite as evidence.
+
+## Sources
+
+Sources represent “where we pull from”.
+They track operational state like:
+
+- Type (e.g. RSS vs STIX)
+- Enabled/disabled
+- Last fetched time
+- Reliability signals (how much to trust/weight claims coming from that source)
+
+If a source is disabled (or unhealthy), downstream outputs will be sparse.
+
+## Documents
+
+Documents represent “what we fetched”.
+They track:
+
+- URL + title
+- Fetched time (and sometimes published time)
+- Cleaned text (when extraction succeeds)
+- Status (ok/error) and an error message when something fails
+
+Documents are the backbone of **traceability**: relationships and findings can cite documents as evidence.
+
+## Chunks and embeddings (why documents get split)
+
+For search and extraction, documents can be split into smaller chunks.
+Those chunks can be embedded for semantic lookup and can be referenced by evidence.
+
+You don’t need to think about embeddings day-to-day, but it helps explain why evidence often points to an excerpt.
+
+## Practical workflow
+
+1. Configure and enable sources/integrations.
+2. Run agents to ingest → documents → findings/graph updates.
+3. If something looks wrong, inspect sources and documents first.
+
+<Callout type="tip">
+When you see “no data”, don’t start by debugging the UI. Start by checking whether sources are enabled and documents are being fetched successfully.
+</Callout>
+

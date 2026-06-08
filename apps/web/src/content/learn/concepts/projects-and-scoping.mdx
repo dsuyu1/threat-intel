@@ -1,0 +1,33 @@
+---
+title: "Projects & scoping"
+section: "Concepts"
+description: "How the platform separates data, settings, and workflows into projects."
+order: 6
+lastUpdated: "2026-06-07"
+---
+
+# Projects & scoping
+
+A **project** is the primary boundary for “what data and configuration belongs together”.
+When you switch projects, you’re changing the scope for:
+
+- Connected sources/integrations
+- Agent runs and their outputs (findings, documents, graph updates)
+- Dashboards, risk, and operational views
+
+## Why projects exist
+
+Threat intel is only useful when it’s scoped:
+
+- Different business units care about different tech stacks and assets.
+- One team’s alerting rules shouldn’t pollute another team’s view.
+- Integrations (scanner feeds, TAXII connections, etc.) are often environment-specific.
+
+Projects give you separation without needing multiple accounts or deployments.
+
+## Practical implication
+
+If you’re “missing data”, confirm you’re in the right project before troubleshooting ingestion.
+
+Next: if the project is correct but outputs are empty, read: [Sources & documents](/learn/concepts/sources-and-documents).
+

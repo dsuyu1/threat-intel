@@ -160,8 +160,7 @@ export function PlaybookDraftEditor(props: {
         {error ? <div className="mt-2 text-sm text-rose-600 dark:text-rose-400">{error}</div> : null}
       </div>
 
-      {parsed.ok ? <PlaybookViewer content={parsed.value} /> : null}
+      {parsed.ok ? <PlaybookViewer content={parsed.value} playbookId={props.playbookId} projectSlug={props.projectSlug} /> : null}
     </div>
   );
 }
-

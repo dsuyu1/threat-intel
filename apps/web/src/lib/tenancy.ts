@@ -28,6 +28,10 @@ function getLocalFallback() {
   return { clerkId, email, tier };
 }
 
+function allowLocalAuthFallback() {
+  return process.env.NODE_ENV !== "production";
+}
+
 async function getOrCreateUser(params: { clerkId: string; email: string; tier: string }) {
   const db = getDb();
   const [existing] = await db
@@ -135,22 +139,34 @@ async function setUserDefaultProjectId(params: { userId: string; projectId: stri
 
 export async function getViewerContext(params?: { projectSlug?: string | null }) {
   const db = getDb();
+  const isProduction = process.env.NODE_ENV === "production";
 
   let clerkUserId: string | null = null;
   let clerkOrgId: string | null = null;
+  let authFailed = false;
   try {
     const a = await auth();
     clerkUserId = a.userId ?? null;
     clerkOrgId = (a as any).orgId ?? null;
-  } catch {
-    // ignore (local/dev without Clerk)
+  } catch (err) {
+    authFailed = true;
+    if (isProduction) throw new Error("Clerk unavailable", { cause: err as any });
   }
 
-  const fallback = getLocalFallback();
-  const clerkId = clerkUserId ?? fallback.clerkId;
-  const email =
-    (clerkUserId ? safeEmailForClerkId(clerkId) : fallback.email) ?? safeEmailForClerkId(clerkId);
-  const tier = fallback.tier;
+  const shouldUseFallback = !clerkUserId && allowLocalAuthFallback();
+  if (!clerkUserId && !shouldUseFallback) {
+    // Fail closed in production: do not mint a privileged "local" user if Clerk is down/misconfigured,
+    // or if the request is unauthenticated.
+    if (authFailed) {
+      throw new Error("Clerk auth() failed and no userId is available.");
+    }
+    throw new Error("Not authenticated.");
+  }
+
+  const fallback = shouldUseFallback ? getLocalFallback() : null;
+  const clerkId = clerkUserId ?? fallback?.clerkId ?? "unknown";
+  const email = (clerkUserId ? safeEmailForClerkId(clerkId) : fallback?.email) ?? safeEmailForClerkId(clerkId);
+  const tier = fallback?.tier ?? "free";
 
   const user = await getOrCreateUser({ clerkId, email, tier });
 

@@ -2,8 +2,9 @@
  * TtpAgent — syncs MITRE ATT&CK STIX and writes:
  * - kg_entities: actors (G####), techniques (T#### / T####.###), mitigations (M####)
  * - kg_entities: campaigns (C####)
+ * - kg_entities: CVEs (CVE-YYYY-NNNN...) referenced by MITRE techniques
  * - kg_aliases: actor name + aliases
- * - kg_relations: actor_uses_technique, technique_mitigated_by, actor_attributed_campaign
+ * - kg_relations: actor_uses_technique, technique_mitigated_by, actor_attributed_campaign, technique_references_cve
  *
  * Notes:
  * - Optimized for the Neon HTTP driver: minimizes DB round-trips using batched upserts.
@@ -143,6 +144,39 @@ function getAttackCitations(refs: StixExternalRef[] | undefined): Array<{ name: 
   }
 
   return deduped;
+}
+
+const CVE_ID_RE = /^CVE-\d{4}-\d{4,}$/i;
+const CVE_IN_URL_RE = /CVE-\d{4}-\d{4,}/gi;
+
+function getCveIdsFromExternalRefs(refs: StixExternalRef[] | undefined): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const ref of refs ?? []) {
+    const id = ref.external_id?.trim();
+    if (id && CVE_ID_RE.test(id)) {
+      const cve = id.toUpperCase();
+      if (!seen.has(cve)) {
+        seen.add(cve);
+        out.push(cve);
+      }
+      continue;
+    }
+
+    const url = ref.url?.trim();
+    if (!url) continue;
+    const matches = url.match(CVE_IN_URL_RE) ?? [];
+    for (const m of matches) {
+      const cve = m.toUpperCase();
+      if (!CVE_ID_RE.test(cve)) continue;
+      if (seen.has(cve)) continue;
+      seen.add(cve);
+      out.push(cve);
+    }
+  }
+
+  return out;
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -292,24 +326,30 @@ async function syncMitreCampaignsFromWeb(now: Date): Promise<void> {
   console.log(`[TtpAgent] MITRE web campaigns synced. Campaigns: ${campaigns.length} | Relations: ${rels.length}`);
 }
 
-async function ensureMitreDocument(stixUrl: string): Promise<string> {
+async function ensureMitreDocument(params: { stixUrl: string; sourceId: string | null }): Promise<string> {
   const db = getDb();
   const existing = await db
-    .select({ id: documents.id })
+    .select({ id: documents.id, sourceId: documents.sourceId })
     .from(documents)
-    .where(eq(documents.url, stixUrl))
+    .where(eq(documents.url, params.stixUrl))
     .limit(1);
-  if (existing[0]?.id) return existing[0].id;
+  if (existing[0]?.id) {
+    if (!existing[0].sourceId && params.sourceId) {
+      await db.update(documents).set({ sourceId: params.sourceId }).where(eq(documents.id, existing[0].id));
+    }
+    return existing[0].id;
+  }
 
-  const hash = crypto.createHash("sha256").update(stixUrl).digest("hex");
+  const hash = crypto.createHash("sha256").update(params.stixUrl).digest("hex");
   const inserted = await db
     .insert(documents)
     .values({
-      url: stixUrl,
+      url: params.stixUrl,
       title: "MITRE ATT&CK Enterprise STIX",
       contentHash: hash,
       cleanText: null,
       status: "ok",
+      sourceId: params.sourceId,
     })
     .returning({ id: documents.id });
   return inserted[0]!.id;
@@ -363,6 +403,27 @@ async function insertAliases(rows: AliasRow[]): Promise<void> {
           entityId: r.entityId,
           alias: r.alias,
           aliasNorm: r.aliasNorm,
+        }))
+      )
+      .onConflictDoNothing();
+  }
+}
+
+async function insertEntitiesIfMissing(rows: EntityRow[], now: Date): Promise<void> {
+  if (rows.length === 0) return;
+  const db = getDb();
+  for (const batch of chunk(rows, 800)) {
+    await db
+      .insert(kgEntities)
+      .values(
+        batch.map((r) => ({
+          kind: r.kind,
+          entityId: r.entityId,
+          name: r.name,
+          aliases: r.aliases,
+          description: r.description,
+          attributes: (r.attributes ?? null) as never,
+          updatedAt: now,
         }))
       )
       .onConflictDoNothing();
@@ -454,15 +515,17 @@ export async function runTtpAgent() {
     .where(eq(sources.id, src.id));
 
   // Keep a doc row for provenance (even though we don't insert per-relation evidence here).
-  await ensureMitreDocument(src.url);
+  await ensureMitreDocument({ stixUrl: src.url, sourceId: src.id });
 
   const idMap = new Map<string, EntityRef>();
   const actorById = new Map<string, EntityRow>();
   const techniqueById = new Map<string, EntityRow>();
   const mitigationById = new Map<string, EntityRow>();
   const campaignById = new Map<string, EntityRow>();
+  const cveById = new Map<string, EntityRow>();
   const aliases: AliasRow[] = [];
   const relationships: Array<Pick<StixRelationship, "relationship_type" | "source_ref" | "target_ref">> = [];
+  const techniqueCves: Array<{ techniqueId: string; cveId: string }> = [];
 
   const pipeline = chain([
     Readable.fromWeb(res.body as never),
@@ -517,6 +580,21 @@ export async function runTtpAgent() {
         },
       });
       idMap.set(tech.id, { kind: "technique", entityId: tid });
+
+      // CVE refs are embedded in technique external_references (authoritative mapping).
+      for (const cveId of getCveIdsFromExternalRefs(tech.external_references)) {
+        if (!cveById.has(cveId)) {
+          cveById.set(cveId, {
+            kind: "cve",
+            entityId: cveId,
+            name: cveId,
+            aliases: null,
+            description: null,
+            attributes: { createdFrom: "mitre-attack" },
+          });
+        }
+        techniqueCves.push({ techniqueId: tid, cveId });
+      }
     } else if (obj.type === "course-of-action") {
       const mit = obj as StixMitigation;
       const mid = getAttackExternalId(mit.external_references);
@@ -564,6 +642,7 @@ export async function runTtpAgent() {
     ...mitigationById.values(),
     ...campaignById.values(),
   ];
+  const cveRows: EntityRow[] = [...cveById.values()];
 
   // Deduplicate alias rows by (kind, alias_norm) to avoid work.
   const aliasByKey = new Map<string, AliasRow>();
@@ -648,13 +727,31 @@ export async function runTtpAgent() {
     }
   }
 
+  // Add technique↔CVE links derived directly from technique.external_references.
+  for (const tc of techniqueCves) {
+    const key = `technique_references_cve||${tc.techniqueId}||${tc.cveId}`;
+    relationByKey.set(key, {
+      type: "technique_references_cve",
+      fromKind: "technique",
+      fromId: tc.techniqueId,
+      toKind: "cve",
+      toId: tc.cveId,
+      support: 1,
+      confidence: 1,
+      firstSeen: now,
+      lastSeen: now,
+      attributes: { sourceId: src.id },
+    });
+  }
+
   const relationRows = Array.from(relationByKey.values());
 
   console.log(
-    `[TtpAgent] Parsed. Actors: ${actorById.size} | Techniques: ${techniqueById.size} | Mitigations: ${mitigationById.size} | Campaigns: ${campaignById.size} | Relations: ${relationRows.length}`
+    `[TtpAgent] Parsed. Actors: ${actorById.size} | Techniques: ${techniqueById.size} | Mitigations: ${mitigationById.size} | Campaigns: ${campaignById.size} | CVEs: ${cveById.size} | Relations: ${relationRows.length}`
   );
 
   await upsertEntities(entityRows, now);
+  await insertEntitiesIfMissing(cveRows, now);
   await insertAliases(aliasRows);
   await upsertRelations(relationRows);
   await syncMitreCampaignsFromWeb(now);

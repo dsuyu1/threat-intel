@@ -19,17 +19,27 @@ import { runOriginAgent } from "./agents/origin.js";
 import { runActorProfileAgent } from "./agents/profile.js";
 import { runTtpAgent } from "./agents/ttp.js";
 import { runVulnAgent } from "./agents/vuln.js";
+import { runVulnScannerSyncAgent } from "./agents/vuln-scanners.js";
+import { runDetectionsAgent } from "./agents/detections.js";
+import { runTheHiveSyncAgent } from "./agents/thehive.js";
 import { runCustomAgents } from "./agents/custom.js";
+import { runIocTaxiiImportAgent } from "./agents/ioc-taxii.js";
+import { runIocEnrichAgent } from "./agents/ioc-enrich.js";
 
 type SystemAgentKey =
   | "vuln"
+  | "vuln-scanners"
   | "exploit"
   | "attack"
   | "ttp"
   | "malware"
+  | "thehive"
   | "actor-profile"
   | "navigator"
+  | "detections"
   | "merge"
+  | "ioc-taxii"
+  | "ioc-enrich"
   | "custom-runner";
 
 type Args = {
@@ -37,6 +47,8 @@ type Args = {
   projectId: string | null;
   userId: string | null;
   customAgentId: string | null;
+  scenarioId: string | null;
+  connectionId: string | null;
   force: boolean;
 };
 
@@ -46,6 +58,8 @@ function parseArgs(argv: string[]): Args {
     projectId: null,
     userId: null,
     customAgentId: null,
+    scenarioId: null,
+    connectionId: null,
     force: true,
   };
 
@@ -55,6 +69,8 @@ function parseArgs(argv: string[]): Args {
     else if (a === "--projectId") out.projectId = String(argv[++i] ?? "");
     else if (a === "--userId") out.userId = String(argv[++i] ?? "");
     else if (a === "--customAgentId") out.customAgentId = String(argv[++i] ?? "");
+    else if (a === "--scenarioId") out.scenarioId = String(argv[++i] ?? "");
+    else if (a === "--connectionId") out.connectionId = String(argv[++i] ?? "");
     else if (a === "--force") out.force = String(argv[++i] ?? "1") !== "0";
   }
 
@@ -62,6 +78,8 @@ function parseArgs(argv: string[]): Args {
   out.projectId = out.projectId ? out.projectId.trim() : null;
   out.userId = out.userId ? out.userId.trim() : null;
   out.customAgentId = out.customAgentId ? out.customAgentId.trim() : null;
+  out.scenarioId = out.scenarioId ? out.scenarioId.trim() : null;
+  out.connectionId = out.connectionId ? out.connectionId.trim() : null;
 
   return out;
 }
@@ -79,13 +97,18 @@ async function isEnabledForSchedule(agentKey: string): Promise<boolean> {
 function isSystemKey(k: string): k is SystemAgentKey {
   return (
     k === "vuln" ||
+    k === "vuln-scanners" ||
     k === "exploit" ||
     k === "attack" ||
     k === "ttp" ||
     k === "malware" ||
+    k === "thehive" ||
     k === "actor-profile" ||
     k === "navigator" ||
+    k === "detections" ||
     k === "merge" ||
+    k === "ioc-taxii" ||
+    k === "ioc-enrich" ||
     k === "custom-runner"
   );
 }
@@ -122,13 +145,18 @@ async function runSystemAgent(args: Args) {
 
   try {
     if (args.agentKey === "vuln") await runVulnAgent();
+    else if (args.agentKey === "vuln-scanners") await runVulnScannerSyncAgent({ connectionId: args.connectionId });
     else if (args.agentKey === "exploit") await runExploitAgent();
     else if (args.agentKey === "attack") await runAttackAgent();
     else if (args.agentKey === "ttp") await runTtpAgent();
     else if (args.agentKey === "malware") await runMalwareAgent();
+    else if (args.agentKey === "thehive") await runTheHiveSyncAgent();
     else if (args.agentKey === "actor-profile") await runActorProfileAgent();
     else if (args.agentKey === "navigator") await runNavigatorAgent();
+    else if (args.agentKey === "detections") await runDetectionsAgent({ scenarioId: args.scenarioId });
     else if (args.agentKey === "merge") await runMergeAgent();
+    else if (args.agentKey === "ioc-taxii") await runIocTaxiiImportAgent();
+    else if (args.agentKey === "ioc-enrich") await runIocEnrichAgent();
     else if (args.agentKey === "custom-runner") {
       // Manual run should be "force" by default: let users see output immediately even if
       // their schedules wouldn't trigger right now.
@@ -174,4 +202,3 @@ if (process.argv[1]?.endsWith("run-on-demand.ts")) {
     process.exitCode = 1;
   });
 }
-

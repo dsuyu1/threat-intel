@@ -1,0 +1,87 @@
+---
+title: "Your first finding"
+section: "Getting Started"
+description: "How to read a finding and take action."
+order: 3
+lastUpdated: "2026-06-07"
+---
+
+# Your first finding
+
+A **finding** is an agent-generated unit of work: a CVE, an exploit signal, a threat report, or a TTP update.
+It’s what you triage day-to-day.
+
+## Where to find findings
+
+Open **Findings** at [`/findings`](/findings).
+
+If the list is empty:
+
+- Make sure you have sources connected: [`/data/sources`](/data/sources)
+- Run agents: [`/agents`](/agents)
+
+## Anatomy of a finding (what the fields mean)
+
+### CVSS + band
+
+Findings are grouped into a **band** for quick prioritization:
+
+- **Actively exploited / KEV**: tagged `kev` or `actively-exploited`
+- **Critical**: CVSS ≥ 9.0
+- **High**: CVSS 7.0–8.9
+- **Medium**: CVSS 4.0–6.9
+- **Low**: CVSS &lt; 4.0
+- **Unscored**: no CVSS
+
+### EPSS
+
+Some CVE findings are enriched with **EPSS** (a probability-of-exploitation score, 0–1).
+Use it as a “what’s likely to be exploited” signal alongside CVSS and KEV.
+
+### KEV badge (known exploited)
+
+If a CVE is in CISA’s Known Exploited Vulnerabilities catalog, the platform tags it (`kev`) and elevates it into the “Actively exploited / KEV” band.
+
+### PoC link
+
+Exploit-related findings may include:
+
+- A **PoC URL**
+- A **PoC level** (signal quality)
+
+## What to do with a finding
+
+### 1) Open details
+
+Click a finding to open its detail page (or press **Enter** on the focused card).
+
+### 2) Decide: review vs dismiss
+
+In the Findings page you can:
+
+- **Mark reviewed** when you’ve assessed it
+- **Dismiss** when it’s not relevant to your environment (noise, duplicate, wrong scope)
+
+<Callout type="note">
+Reviewed/dismissed is a triage workflow aid. If you’re collaborating with a team, use Jira or a SOAR webhook for shared state.
+</Callout>
+
+### 3) Create a Jira ticket (optional)
+
+Select one or more findings and use **Create Jira ticket** (requires a Jira automation connection).
+
+### 4) Pivot to related context
+
+Common pivots:
+
+- Search by `CVE-…` to see other findings about the same vulnerability
+- Filter for `kev` or `has PoC` to find urgent items
+- Jump into the Knowledge Graph for the actor/technique context (when present)
+
+If you want a “power user” pivot, use the KQL console: [`/data/query`](/data/query).
+
+## Next
+
+- Learn triage workflows: [Triage findings](/learn/guides/triage-findings)
+- Learn query basics: [KQL basics](/learn/guides/kql-basics)
+

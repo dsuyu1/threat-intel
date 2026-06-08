@@ -12,3 +12,7 @@ out/
 # ── TypeScript ────────────────────────────────────────────────────────────────
 next-env.d.ts
 *.tsbuildinfo
+
+# ── Learn docs (generated) ────────────────────────────────────────────────────
+/src/content/learn/_generated/
+/public/learn/search-index.json

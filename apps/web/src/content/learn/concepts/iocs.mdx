@@ -1,0 +1,49 @@
+---
+title: "IOCs"
+section: "Concepts"
+description: "Indicator kinds, TAXII ingestion, enrichment, and graph linking."
+order: 11
+lastUpdated: "2026-06-07"
+proOnly: true
+---
+
+# IOCs
+
+IOCs (Indicators of Compromise) are structured signals you can ingest, enrich, and pivot on.
+
+## IOC kinds (7)
+
+The platform supports these IOC kinds:
+
+- `ipv4`
+- `ipv6`
+- `domain`
+- `url`
+- `md5`
+- `sha1`
+- `sha256`
+
+## TAXII connections (how IOCs get in)
+
+Most IOC ingestion happens through TAXII 2.1 feeds:
+
+- You configure a TAXII connection (API root, collection ID, auth)
+- The IOC TAXII import agent periodically pulls new objects
+- IOCs are upserted into the project-scoped IOC store
+
+See: [Add an IOC feed](/learn/guides/add-ioc-feed)
+
+## IOC enrichment (what it does)
+
+Enrichment adds context to indicators (e.g., reputation, passive DNS, related malware families).
+Enrichment requires provider keys (configured in the IOC area of the app).
+
+## How IOCs connect to the knowledge graph
+
+IOCs can be linked into the knowledge graph via relationships, for example:
+
+- `ioc_indicates_actor`
+- `ioc_observed_in_campaign`
+
+This makes IOCs a first-class pivot: you can start from an indicator and walk to actors, techniques, and related findings.
+

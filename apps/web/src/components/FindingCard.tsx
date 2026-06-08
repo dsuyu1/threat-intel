@@ -8,6 +8,9 @@ export type FindingCardModel = {
   severity: string | null;
   cvssScore: string | null;
   cvssVector: string | null;
+  epssScore: string | null;
+  epssPercentile: string | null;
+  epssUpdatedAt: string | null;
   cveId: string | null;
   tags: string[];
   sourceUrl: string | null;
@@ -46,6 +49,14 @@ function parseCvss(score: string | null) {
   return Number.isFinite(n) ? n : null;
 }
 
+function parseEpss(score: string | null) {
+  if (!score) return null;
+  const n = Number(score);
+  if (!Number.isFinite(n)) return null;
+  if (n < 0 || n > 1) return null;
+  return n;
+}
+
 function hasTag(tags: string[], t: string) {
   const needle = t.toLowerCase();
   return tags.some((x) => x.toLowerCase() === needle);
@@ -66,9 +77,10 @@ function fmtWhen(iso: string | null) {
 export function FindingCard({ finding, teaser = false, className = "" }: Props) {
   const agentLabel = AGENT_LABELS[finding.agent] ?? finding.agent;
   const agentColor =
-    AGENT_COLORS[finding.agent] ?? "bg-gray-800 text-gray-400 border-gray-700";
+    AGENT_COLORS[finding.agent] ?? "bg-zinc-800 text-zinc-400 border-zinc-700";
 
   const score = parseCvss(finding.cvssScore);
+  const epss = parseEpss(finding.epssScore);
   const isKev = hasTag(finding.tags, "kev");
   const isExploited = hasTag(finding.tags, "actively-exploited") || isKev;
   const isPocFinding = hasPoc(finding);
@@ -77,7 +89,7 @@ export function FindingCard({ finding, teaser = false, className = "" }: Props) 
   return (
     <div
       className={[
-        "bg-white dark:bg-[#141414] border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors",
+        "card bg-white dark:bg-[#141414] border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors",
         className,
       ].join(" ")}
     >
@@ -95,11 +107,11 @@ export function FindingCard({ finding, teaser = false, className = "" }: Props) 
             </span>
 
             {score != null ? (
-              <span className="text-xs text-gray-400 tabular-nums">
+              <span className="text-xs text-zinc-400 tabular-nums">
                 {score.toFixed(1)}
               </span>
             ) : (
-              <span className="text-xs text-gray-500 tabular-nums">Unscored</span>
+              <span className="text-xs text-zinc-500 tabular-nums">Unscored</span>
             )}
 
             {isExploited ? (
@@ -120,7 +132,16 @@ export function FindingCard({ finding, teaser = false, className = "" }: Props) 
               </span>
             ) : null}
 
-            <span className="ml-auto text-xs text-gray-600">
+            {epss != null ? (
+              <span
+                className="text-xs bg-indigo-950 border border-indigo-800 text-indigo-300 px-2 py-0.5 rounded font-medium tabular-nums"
+                title="EPSS (FIRST): probability of exploitation in the next 30 days"
+              >
+                EPSS {Math.round(epss * 100)}%
+              </span>
+            ) : null}
+
+            <span className="ml-auto text-xs text-zinc-600">
               {fmtWhen(finding.publishedAt ?? finding.createdAt)}
             </span>
           </div>
@@ -129,7 +150,7 @@ export function FindingCard({ finding, teaser = false, className = "" }: Props) 
 
           {finding.summary ? (
             <p
-              className={`text-sm text-gray-400 line-clamp-3 ${
+              className={`text-sm text-zinc-400 line-clamp-3 ${
                 teaser ? "blur-sm select-none pointer-events-none" : ""
               }`}
             >
@@ -143,7 +164,7 @@ export function FindingCard({ finding, teaser = false, className = "" }: Props) 
                 .filter((t) => t !== "kev" && t !== "actively-exploited")
                 .slice(0, 4)
                 .map((tag) => (
-                  <span key={tag} className="text-xs bg-gray-800 text-gray-500 px-2 py-0.5 rounded">
+                  <span key={tag} className="text-xs bg-zinc-800 text-zinc-500 px-2 py-0.5 rounded">
                     {tag}
                   </span>
                 ))}

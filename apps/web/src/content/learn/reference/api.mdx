@@ -1,0 +1,80 @@
+---
+title: "API reference"
+section: "Reference"
+description: "v1 endpoints, auth, scopes, rate limits, and example responses."
+order: 6
+lastUpdated: "2026-06-07"
+---
+
+# API reference
+
+The platform exposes a REST-ish v1 API under `/api/v1/*`.
+
+## Authentication
+
+Provide an API key via either:
+
+- `Authorization: Bearer <key>`
+- `x-api-key: <key>`
+
+API keys are created in the UI at [`/api-keys`](/api-keys).
+
+## Scopes
+
+Scopes are enforced per endpoint. Available scopes include:
+
+- `findings:read`
+- `actors:read`
+- `cves:read`
+- `navigator:read`
+- `risk:read`
+- `stix:read`
+- `taxii:read`
+- `query:run`
+- `playbooks:write`
+- `detections:generate`
+
+## Rate limits
+
+API keys have a per-minute limit. If exceeded, responses return:
+
+- HTTP `429`
+- JSON `{ "error": "Rate limited" }`
+- a `retry-after` header in seconds
+
+## Endpoints (high level)
+
+### Query
+
+- `POST /api/v1/query` (scope: `query:run`)
+  - Body: `{ "query": "Findings | take 10", "debug": false }`
+  - Response: `{ ok, rows, columns, debug? }`
+
+### Findings
+
+- `GET /api/v1/findings` (scope: `findings:read`)
+  - Query params: `q`, `agent`, `cveId`, `minCvss`, `maxCvss`, `since`, `limit`, `offset`
+  - Response: `{ ok, total, limit, offset, rows: [...] }`
+
+### Actors
+
+- `GET /api/v1/actors/resolve?q=...` (scope: `actors:read`)
+- `GET /api/v1/actors/:actorId` (scope: `actors:read`)
+
+### Navigator (Pro)
+
+- `GET /api/v1/navigator/scenarios` (scope: `navigator:read`)
+- `GET /api/v1/navigator/detections` (scope: `navigator:read`)
+
+### Risk (Pro)
+
+- `GET /api/v1/risk/overview` (scope: `risk:read`)
+
+### STIX / TAXII
+
+- `GET /api/v1/stix/bundle` (scope: `stix:read`)
+
+<Callout type="note">
+Exact response shapes vary by endpoint and are easiest to inspect by calling the API directly. If you need stable automation contracts, pin your usage to the fields you read and treat new fields as additive.
+</Callout>
+

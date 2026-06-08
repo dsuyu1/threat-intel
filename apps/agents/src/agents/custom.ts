@@ -1,4 +1,4 @@
-import { getDb, agentOutputs, customAgents, findings, userStack } from "@ti/db";
+import { agentRuns, agentOutputs, customAgents, findings, getDb, userStack } from "@ti/db";
 import { and, desc, eq, gte, inArray, isNotNull } from "drizzle-orm";
 import { generateText, type AiOverrides } from "../lib/openai.js";
 import { getUserAiOverrides } from "../lib/user-ai-keys.js";
@@ -86,11 +86,16 @@ function renderFindingsForPrompt(rows: Array<{ agent: string; title: string; cve
     .join("\n");
 }
 
-export async function runCustomAgents(params?: { onlyId?: string; force?: boolean }) {
+export async function runCustomAgents(params?: { onlyId?: string; force?: boolean; runId?: string }) {
   const db = getDb();
 
   const onlyId = String(params?.onlyId ?? "").trim();
   const force = Boolean(params?.force);
+  const runId = String(params?.runId ?? "").trim();
+
+  if (runId && !onlyId) {
+    throw new Error("runId can only be used with onlyId (single-agent runs)");
+  }
   const conditions = [];
   if (onlyId) conditions.push(eq(customAgents.id, onlyId));
   // Scheduled/default runs only execute enabled agents; manual "onlyId+force" can run even if disabled.
@@ -127,16 +132,42 @@ export async function runCustomAgents(params?: { onlyId?: string; force?: boolea
   const runIds: string[] = [];
 
   for (const a of due) {
-    const run = await startRun({
-      agentKey: "custom",
-      kind: "custom",
-      projectId: a.projectId,
-      userId: a.userId,
-      customAgentId: a.id,
-    });
+    const activeRun: { id: string; startedAt: Date } =
+      runId && onlyId
+        ? await (async () => {
+            const [existing] = await db
+              .select({
+                id: agentRuns.id,
+                startedAt: agentRuns.startedAt,
+                agentKey: agentRuns.agentKey,
+                kind: agentRuns.kind,
+                projectId: agentRuns.projectId,
+                userId: agentRuns.userId,
+                customAgentId: agentRuns.customAgentId,
+              })
+              .from(agentRuns)
+              .where(eq(agentRuns.id, runId))
+              .limit(1);
 
-    runIds.push(run.id);
-    await logRunEvent({ runId: run.id, message: `Custom agent: ${a.name}` });
+            if (!existing?.id) throw new Error("Run not found");
+            if (String(existing.kind) !== "custom") throw new Error("Run kind mismatch");
+            if (String(existing.agentKey) !== "custom") throw new Error("Run agentKey mismatch");
+            if (String(existing.projectId) !== String(a.projectId)) throw new Error("Run projectId mismatch");
+            if (String(existing.userId ?? "") !== String(a.userId)) throw new Error("Run userId mismatch");
+            if (String(existing.customAgentId ?? "") !== String(a.id)) throw new Error("Run customAgentId mismatch");
+
+            return { id: existing.id, startedAt: existing.startedAt };
+          })()
+        : await startRun({
+            agentKey: "custom",
+            kind: "custom",
+            projectId: a.projectId,
+            userId: a.userId,
+            customAgentId: a.id,
+          });
+
+    runIds.push(activeRun.id);
+    await logRunEvent({ runId: activeRun.id, message: `Custom agent: ${a.name}` });
 
     try {
       const definition = normalizeDefinition(a.definition);
@@ -144,7 +175,7 @@ export async function runCustomAgents(params?: { onlyId?: string; force?: boolea
 
       const { ai, error: aiError } = await getUserAiOverrides({ userId: a.userId, projectId: a.projectId });
       if (aiError) {
-        await logRunEvent({ runId: run.id, level: "warn", message: aiError });
+        await logRunEvent({ runId: activeRun.id, level: "warn", message: aiError });
       }
 
       const aiOverrides: AiOverrides | undefined =
@@ -167,7 +198,7 @@ export async function runCustomAgents(params?: { onlyId?: string; force?: boolea
           const limit = Math.max(5, Math.min(80, Number(step.params?.limit ?? 20)));
           const agentsFilter = (step.params?.agents ?? []).filter(Boolean);
 
-          await logRunEvent({ runId: run.id, progress, message: `Fetching findings (last ${hoursBack}h, limit ${limit})` });
+          await logRunEvent({ runId: activeRun.id, progress, message: `Fetching findings (last ${hoursBack}h, limit ${limit})` });
 
           const since = new Date(Date.now() - hoursBack * 60 * 60 * 1000);
           const conds = [isNotNull(findings.publishedAt), gte(findings.publishedAt, since)];
@@ -192,7 +223,7 @@ export async function runCustomAgents(params?: { onlyId?: string; force?: boolea
         }
 
         if (step.type === "generate_report") {
-          await logRunEvent({ runId: run.id, progress, message: "Generating report" });
+          await logRunEvent({ runId: activeRun.id, progress, message: "Generating report" });
 
           const stackRows = await db
             .select({ technology: userStack.technology, versionRange: userStack.versionRange, sector: userStack.sector })
@@ -241,9 +272,10 @@ export async function runCustomAgents(params?: { onlyId?: string; force?: boolea
       const [out] = await db
         .insert(agentOutputs)
         .values({
-          runId: run.id,
+          runId: activeRun.id,
           projectId: a.projectId,
           userId: a.userId,
+          systemRun: false,
           agentKey: "custom",
           format: "markdown",
           content: content || "(empty)",
@@ -256,9 +288,9 @@ export async function runCustomAgents(params?: { onlyId?: string; force?: boolea
         .where(eq(customAgents.id, a.id));
 
       await finishRun({
-        runId: run.id,
+        runId: activeRun.id,
         status: "succeeded",
-        startedAt: run.startedAt,
+        startedAt: activeRun.startedAt,
         metrics: {
           customAgentId: a.id,
           outputId: out?.id ?? null,
@@ -267,8 +299,8 @@ export async function runCustomAgents(params?: { onlyId?: string; force?: boolea
         },
       });
     } catch (err) {
-      await logRunEvent({ runId: run.id, level: "error", message: "Failed" });
-      await finishRun({ runId: run.id, status: "failed", startedAt: run.startedAt, error: err });
+      await logRunEvent({ runId: activeRun.id, level: "error", message: "Failed" });
+      await finishRun({ runId: activeRun.id, status: "failed", startedAt: activeRun.startedAt, error: err });
     }
   }
 

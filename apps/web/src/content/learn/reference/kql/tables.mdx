@@ -1,0 +1,258 @@
+---
+title: "Tables"
+section: "Reference"
+description: "Available tables and their key columns."
+order: 2
+lastUpdated: "2026-06-07"
+---
+
+# Tables
+
+This page lists queryable tables in the platform’s KQL console and gives quick examples.
+
+<Callout type="note">
+Available tables depend on your plan. If you see “Table not allowed”, upgrade or use a different table.
+</Callout>
+
+## Documents
+
+What it holds: raw ingested artifacts (RSS items, STIX bundles, fetched pages) and extraction status.
+
+Key columns (types):
+
+- `id` (uuid), `url` (string), `title` (string), `status` (`ok|error`), `fetchedAt` (timestamp), `error` (string)
+
+Examples:
+
+```kql
+Documents
+| where status == "error"
+| sort by fetchedAt desc
+| take 25
+```
+
+```kql
+Documents
+| where url contains "cisa.gov"
+| sort by fetchedAt desc
+| take 25
+```
+
+## Findings
+
+What it holds: agent-generated findings (CVE, exploit, threat feed, malware).
+
+Key columns:
+
+- `severity` (string), `cvssScore` (number), `epssScore` (number), `cveId` (string), `pocUrl` (string), `tags` (string), `publishedAt` (timestamp)
+
+Examples:
+
+```kql
+Findings
+| where severity in ("critical", "high")
+| sort by publishedAt desc
+| take 25
+```
+
+```kql
+Findings
+| where tags contains "kev"
+| take 50
+```
+
+```kql
+Findings
+| where epssScore >= 0.5
+| sort by epssScore desc
+| take 25
+```
+
+## KgEntities (Pro)
+
+What it holds: the raw knowledge graph entity table (actors, CVEs, techniques, sectors, …).
+
+Key columns: `kind`, `entityId`, `name`, `aliases`, `updatedAt`
+
+Examples:
+
+```kql
+KgEntities
+| where kind == "actor"
+| sort by updatedAt desc
+| take 20
+```
+
+```kql
+KgEntities
+| where name contains "Sandworm"
+| take 10
+```
+
+## KgRelations (Pro)
+
+What it holds: typed relationships between entities (with support/confidence and timestamps).
+
+Examples:
+
+```kql
+KgRelations
+| where type == "actor_uses_technique"
+| take 20
+```
+
+```kql
+KgRelations
+| where fromKind == "actor" and toKind == "cve"
+| take 20
+```
+
+## KgEvidence (Pro)
+
+What it holds: citations (excerpts + URLs) attached to relationships.
+
+Examples:
+
+```kql
+KgEvidence
+| sort by createdAt desc
+| take 25
+```
+
+```kql
+KgEvidence
+| where url contains "microsoft.com"
+| take 25
+```
+
+## ActorProfiles (Pro)
+
+What it holds: long-form, curated actor profiles generated offline.
+
+Examples:
+
+```kql
+ActorProfiles
+| sort by updatedAt desc
+| take 10
+```
+
+```kql
+ActorProfiles
+| where profileText contains "ransomware"
+| take 10
+```
+
+## Iocs (Pro)
+
+What it holds: project-scoped IOC store (ingested from TAXII and other sources).
+
+Examples:
+
+```kql
+Iocs
+| where kind in ("domain", "url")
+| sort by lastSeenAt desc
+| take 50
+```
+
+```kql
+Iocs
+| where value contains "login"
+| take 50
+```
+
+## Playbooks (Pro)
+
+What it holds: incident playbooks (draft/approved/archived) scoped to your project.
+
+Examples:
+
+```kql
+Playbooks
+| where status == "approved"
+| sort by updatedAt desc
+| take 25
+```
+
+```kql
+Playbooks
+| summarize total=count() by incidentType
+| sort by total desc
+```
+
+## NavigatorScenarios (Pro)
+
+What it holds: Navigator/CTEM scenarios (actor + target + technique/cve/ioc).
+
+Examples:
+
+```kql
+NavigatorScenarios
+| sort by score desc
+| take 25
+```
+
+```kql
+NavigatorScenarios
+| where validationStatus == "validated"
+| sort by score desc
+| take 25
+```
+
+## NavigatorDetections (Pro)
+
+What it holds: generated detections (Sigma/KQL/SPL) for technique scenarios.
+
+Examples:
+
+```kql
+NavigatorDetections
+| where format == "sigma" and lifecycleStatus == "draft"
+| sort by updatedAt desc
+| take 25
+```
+
+```kql
+NavigatorDetections
+| where techniqueId == "T1059"
+| take 25
+```
+
+## RiskEntries (Pro)
+
+What it holds: the risk register (status/category/notes + FAIR-lite estimates).
+
+Examples:
+
+```kql
+RiskEntries
+| where status == "open"
+| sort by updatedAt desc
+| take 50
+```
+
+```kql
+RiskEntries
+| summarize total=count() by category
+| sort by total desc
+```
+
+## Sources
+
+What it holds: configured RSS/STIX sources and their operational state.
+
+Examples:
+
+```kql
+Sources
+| where enabled == false
+| take 25
+```
+
+```kql
+Sources
+| where type == "rss"
+| sort by lastFetchedAt desc
+| take 25
+```

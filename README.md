@@ -35,9 +35,26 @@ pnpm db:migrate
 # 5. Run locally
 pnpm dev
 
-# 6. Test VulnAgent
+# 6. Seed minimum actor data (recommended)
+pnpm run:ttp      # MITRE ATT&CK STIX (no AI)
+pnpm run:attack   # RSS ingestion + AI extraction (backfills ~30 days)
+
+# 7. Test VulnAgent
 pnpm run:vuln
 ```
+
+## Windows dev server ENOENT issues
+
+If you see intermittent Next.js dev errors like missing files under `apps/web/.next/**` (e.g. `_buildManifest.js.tmp.*` or `app-build-manifest.json`), it’s almost always one of:
+
+- Two `next dev` processes running at the same time (both writing to the same `.next` directory)
+- Something deleting/locking `.next` while dev is running (manual deletes, antivirus/EDR, OneDrive/Dropbox sync)
+
+Fix:
+
+1. Stop all dev servers.
+2. Run `pnpm dev:clean` (or `pnpm --filter web dev:clean`).
+3. If it keeps happening, exclude `apps/web/.next` from Defender/EDR and ensure the repo isn’t in a synced folder.
 
 ## Project Structure
 
@@ -45,7 +62,8 @@ pnpm run:vuln
 threat-intel-platform/
 ├── apps/
 │   ├── web/          # Next.js app (UI + API routes)
-│   └── agents/       # Agent scripts (run on cron)
+│   ├── agents/       # Agent scripts (run on cron)
+│   └── mcp/          # MCP server (FastMCP) for external clients
 ├── packages/
 │   ├── db/           # Drizzle schema + client
 │   └── ai/           # Shared AI helpers
@@ -53,13 +71,20 @@ threat-intel-platform/
 └── turbo.json
 ```
 
+## MCP Server
+
+The repo includes an MCP server at `apps/mcp` that connects to the platform via API-key authenticated `/api/v1/*` endpoints.
+
+- Local install/run details: `apps/mcp/README.md`
+- Required API key scopes include: `findings:read`, `actors:read`, `cves:read`, `query:run`, `navigator:read`, `playbooks:write`, `detections:generate`
+
 ## Agents
 
 | Agent | Schedule | Sources |
 |---|---|---|
 | VulnAgent | Every 6h | NVD, CISA KEV |
 | AttackAgent | Every 4h | Threat blogs, CISA Alerts |
-| TTPAgent | Daily 06:00 UTC | MITRE ATT&CK STIX |
+| TTPAgent | Weekly Sun 06:00 UTC | MITRE ATT&CK STIX |
 | ExploitAgent | Every 2h | GitHub, ExploitDB |
 | MalwareAgent | Every 12h | MalwareBazaar, Any.run |
 

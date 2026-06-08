@@ -58,6 +58,15 @@ functions:
           name: vuln-agent-schedule
           description: "Run VulnAgent every 6 hours"
 
+  vulnScannerAgent:
+    handler: src/handlers/vuln-scanners.handler
+    description: "Syncs Tenable/Qualys/Rapid7 scan results and caches per-CVE exposure"
+    events:
+      - schedule:
+          rate: rate(6 hours)
+          enabled: true
+          name: vuln-scanner-agent-schedule
+
   exploitAgent:
     handler: src/handlers/exploit.handler
     description: "Scans GitHub + ExploitDB for new PoCs, tracks time-to-exploit"
@@ -103,6 +112,33 @@ functions:
           enabled: true
           name: navigator-agent-schedule
 
+  epssEnrichAgent:
+    handler: src/handlers/epss-enrich.handler
+    description: "Enriches CVE findings with EPSS probability scores"
+    events:
+      - schedule:
+          rate: cron(30 7 * * ? *)  # daily at 07:30 UTC
+          enabled: true
+          name: epss-enrich-agent-schedule
+
+  detectionsAgent:
+    handler: src/handlers/detections.handler
+    description: "Drains Navigator detection jobs and caches Sigma/KQL/SPL detections"
+    events:
+      - schedule:
+          rate: rate(15 minutes)
+          enabled: true
+          name: detections-agent-schedule
+
+  thehiveSyncAgent:
+    handler: src/handlers/thehive.handler
+    description: "Syncs TheHive cases into incidents for MTTD/MTTR/containment metrics"
+    events:
+      - schedule:
+          rate: rate(15 minutes)
+          enabled: true
+          name: thehive-sync-agent-schedule
+
   customAgentRunner:
     handler: src/handlers/custom.handler
     description: "Runs user-defined agents (prompt + skill blocks) on a schedule"
@@ -111,6 +147,24 @@ functions:
           rate: rate(30 minutes)
           enabled: true
           name: custom-agent-runner-schedule
+
+  iocTaxiiImportAgent:
+    handler: src/handlers/ioc-taxii.handler
+    description: "Imports IOCs from TAXII 2.1 feeds into iocs/ioc_sources"
+    events:
+      - schedule:
+          rate: rate(30 minutes)
+          enabled: true
+          name: ioc-taxii-agent-schedule
+
+  iocEnrichAgent:
+    handler: src/handlers/ioc-enrich.handler
+    description: "Drains IOC enrichment jobs (VirusTotal/Shodan)"
+    events:
+      - schedule:
+          rate: rate(10 minutes)
+          enabled: true
+          name: ioc-enrich-agent-schedule
 
   mergeAgent:
     handler: src/handlers/merge.handler
@@ -124,3 +178,7 @@ functions:
           rate: rate(12 hours)
           enabled: true
           name: malware-agent-schedule
+
+  onDemandAgentRunner:
+    handler: src/handlers/on-demand.handler
+    description: "Runs system/custom agents on-demand (invoked by the web app)"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type RunRow = {
@@ -54,6 +54,10 @@ function badge(status: string) {
   return { cls, label: s };
 }
 
+function isRunning(status: string | null | undefined) {
+  return String(status ?? "").toLowerCase() === "running";
+}
+
 export function AgentsDashboard(props: {
   systemAgents: SystemAgent[];
   customAgents: CustomAgent[];
@@ -73,6 +77,15 @@ export function AgentsDashboard(props: {
   const [baseUrl, setBaseUrl] = useState(props.aiKey.baseUrl ?? "");
   const [keyStatus, setKeyStatus] = useState<string | null>(props.aiKey.error ?? null);
   const [runStatus, setRunStatus] = useState<string | null>(null);
+
+  const runningCount = useMemo(() => props.recentRuns.filter((r) => isRunning(r.status)).length, [props.recentRuns]);
+  const hasRunning = runningCount > 0;
+
+  useEffect(() => {
+    if (!hasRunning) return;
+    const handle = window.setInterval(() => router.refresh(), 5000);
+    return () => window.clearInterval(handle);
+  }, [hasRunning, router]);
 
   const systemEnabledCount = useMemo(
     () => props.systemAgents.filter((a) => a.enabled).length,
@@ -132,7 +145,7 @@ export function AgentsDashboard(props: {
       });
       const data = (await res.json().catch(() => ({}))) as any;
       if (!res.ok) throw new Error(String(data?.error ?? `Request failed (${res.status})`));
-      setRunStatus("Run started. Refreshingâ€¦");
+      setRunStatus("Run started. Refreshing…");
       router.refresh();
     } catch (err) {
       setRunStatus(String((err as any)?.message ?? err));
@@ -152,7 +165,7 @@ export function AgentsDashboard(props: {
       });
       const data = (await res.json().catch(() => ({}))) as any;
       if (!res.ok) throw new Error(String(data?.error ?? `Request failed (${res.status})`));
-      setRunStatus("Run started. Refreshingâ€¦");
+      setRunStatus("Run started. Refreshing…");
       router.refresh();
     } catch (err) {
       setRunStatus(String((err as any)?.message ?? err));
@@ -213,6 +226,29 @@ export function AgentsDashboard(props: {
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
               Enable/disable system agents, build your own, and review runs and output.
             </p>
+            <div className="mt-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-black/30 px-3 py-2 text-xs text-zinc-700 dark:text-zinc-200">
+              <div className="font-medium">Minimum viable actor data</div>
+              <ul className="mt-2 space-y-1 text-zinc-600 dark:text-zinc-400">
+                <li>
+                  <span className="text-zinc-900 dark:text-zinc-100 font-medium">1) Run TTP agent once</span> — syncs MITRE ATT&CK STIX (no AI) to seed TTPs + mitigations.
+                </li>
+                <li>
+                  <span className="text-zinc-900 dark:text-zinc-100 font-medium">2) Run Threat feed agent</span> — ingests RSS and uses AI extraction to add CVEs + sectors (backfills ~30 days on first run).
+                </li>
+              </ul>
+            </div>
+            {hasRunning ? (
+              <div className="mt-3 rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-xs text-sky-700 dark:text-sky-300">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex h-2 w-2 rounded-full bg-sky-500 animate-pulse" aria-hidden="true" />
+                  <span className="font-medium tabular-nums">{runningCount} running</span>
+                  <span className="text-sky-700/70 dark:text-sky-300/70">Auto-refreshing…</span>
+                </div>
+                <div className="mt-2 h-1 w-full rounded-full bg-sky-500/20 overflow-hidden" aria-hidden="true">
+                  <div className="h-full w-1/3 rounded-full bg-sky-500/60 animate-pulse" />
+                </div>
+              </div>
+            ) : null}
           </div>
           <a
             href="/agents/new"
@@ -330,6 +366,7 @@ export function AgentsDashboard(props: {
               {props.systemAgents.map((a) => {
                 const r = a.lastRun;
                 const b = r ? badge(r.status) : null;
+                const running = isRunning(r?.status);
                 return (
                   <tr key={a.key} className="align-top">
                     <td className="py-3 pr-4 whitespace-nowrap">
@@ -356,7 +393,8 @@ export function AgentsDashboard(props: {
                     </td>
                     <td className="py-3 pr-4 whitespace-nowrap">
                       {b ? (
-                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${b.cls}`}>
+                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs ${b.cls}`}>
+                          {running ? <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse" aria-hidden="true" /> : null}
                           {b.label}
                         </span>
                       ) : (
@@ -379,10 +417,10 @@ export function AgentsDashboard(props: {
                         <button
                           type="button"
                           onClick={() => void runSystemNow(a.key)}
-                          disabled={busyKey === `run:sys:${a.key}`}
+                          disabled={busyKey === `run:sys:${a.key}` || running}
                           className="rounded-md border border-zinc-200 dark:border-zinc-800 px-2 py-1 text-xs hover:bg-white dark:hover:bg-black/40 disabled:opacity-60"
                         >
-                          {busyKey === `run:sys:${a.key}` ? "Starting..." : "Run now"}
+                          {busyKey === `run:sys:${a.key}` ? "Starting..." : running ? "Running…" : "Run now"}
                         </button>
                         <a
                           href={`/agents/runs/${r?.id ?? ""}`}
@@ -417,6 +455,7 @@ export function AgentsDashboard(props: {
           {props.customAgents.map((a) => {
             const r = a.lastRun;
             const b = r ? badge(r.status) : null;
+            const running = isRunning(r?.status);
             return (
               <div key={a.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-black/30 p-4">
                 <div className="flex items-start justify-between gap-4">
@@ -424,7 +463,8 @@ export function AgentsDashboard(props: {
                     <div className="flex items-center gap-2">
                       <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">{a.name}</div>
                       {b ? (
-                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] ${b.cls}`}>
+                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] ${b.cls}`}>
+                          {running ? <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse" aria-hidden="true" /> : null}
                           {b.label}
                         </span>
                       ) : null}
@@ -452,10 +492,10 @@ export function AgentsDashboard(props: {
                     <button
                       type="button"
                       onClick={() => void runCustomNow(a.id)}
-                      disabled={busyKey === `run:custom:${a.id}`}
+                      disabled={busyKey === `run:custom:${a.id}` || running}
                       className="rounded-md border border-zinc-200 dark:border-zinc-800 px-2 py-1 text-xs hover:bg-white dark:hover:bg-black/40 disabled:opacity-60"
                     >
-                      {busyKey === `run:custom:${a.id}` ? "Starting..." : "Run now"}
+                      {busyKey === `run:custom:${a.id}` ? "Starting..." : running ? "Running…" : "Run now"}
                     </button>
                     <a
                       href={`/agents/runs/${r?.id ?? ""}`}

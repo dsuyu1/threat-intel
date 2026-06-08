@@ -1,0 +1,49 @@
+---
+title: "Connect a vulnerability scanner"
+section: "Guides"
+description: "Set up Tenable/Qualys/Rapid7 and enable CVE-to-asset exposure matching."
+order: 4
+lastUpdated: "2026-06-07"
+proOnly: true
+---
+
+# Connect a vulnerability scanner
+
+Scanner integrations pull exposure data from your environment and connect it back to CVE findings.
+
+Open the integration at [`/integrations/vuln-scanners`](/integrations/vuln-scanners).
+
+## 1) Create a connection
+
+1. Choose the scanner kind: **Tenable**, **Qualys**, or **Rapid7**.
+2. Fill:
+   - **Name**: a label (e.g., “Prod Tenable”)
+   - **Enabled**: keep enabled to allow scheduled sync
+   - **Base URL**: your scanner API base URL (varies by product / region)
+   - Credentials:
+     - Tenable: `accessKey` + `secretKey`
+     - Qualys: `username` + `password`
+     - Rapid7: either `apiKey` OR `username` + `password`
+3. Click **Save**.
+
+## 2) Test the connection
+
+Use **Test** to validate credentials and connectivity.
+
+## 3) Sync now (on-demand)
+
+Use **Sync now** to trigger the scanner sync agent immediately.
+
+## 4) Verify it worked
+
+After a sync:
+
+- Exposure counts can show up alongside CVE-related findings.
+- CVE pages may show “affected assets” / exposure rollups (depending on your data).
+
+If you’re not seeing exposure data, confirm:
+
+- The connection is enabled
+- The scanner agent is enabled in [`/agents`](/agents)
+- Your database is migrated (integrations tables exist)
+

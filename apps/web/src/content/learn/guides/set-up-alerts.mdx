@@ -1,0 +1,48 @@
+---
+title: "Set up alerts"
+section: "Guides"
+description: "Slack/Teams/email digests and what triggers each."
+order: 5
+lastUpdated: "2026-06-07"
+---
+
+# Set up alerts
+
+Alerts help you push high-signal findings to the tools your team already uses.
+
+## Choose the right integration type
+
+- **Slack / Teams / Discord**: human-readable notifications
+- **SOAR webhooks**: structured JSON for automation
+- **Jira Automation**: structured JSON intended to create issues automatically
+- **Email digest**: periodic summaries
+
+## Slack
+
+1. Go to [`/integrations/slack-webhooks`](/integrations/slack-webhooks).
+2. Add a webhook URL.
+3. Configure criteria (optional) to limit what gets delivered.
+
+## Microsoft Teams
+
+1. Go to [`/integrations/microsoft-teams`](/integrations/microsoft-teams).
+2. Add an incoming webhook URL.
+
+## SOAR webhooks
+
+1. Go to [`/integrations/soar-webhooks`](/integrations/soar-webhooks).
+2. Add a webhook URL and optional custom headers.
+3. Configure criteria.
+
+## Jira Automation
+
+1. Go to [`/integrations/jira-automation`](/integrations/jira-automation).
+2. Paste the Jira Automation webhook URL for your rule.
+3. Configure criteria.
+
+For payload formats, see: [Integrations payloads](/learn/reference/integrations).
+
+## Email digest
+
+Go to [`/integrations/email-digest`](/integrations/email-digest) to configure a periodic digest.
+

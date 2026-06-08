@@ -294,7 +294,9 @@ export async function recomputeNavigatorScenariosForUser(params: {
   for (const c of candidates) sectorStrengthByActor.set(c.actorId, Number(c.strength ?? 0));
 
   if (!actorIds.length) {
-    await db.delete(navigatorScenarios).where(eq(navigatorScenarios.projectId, params.projectId));
+    await db
+      .delete(navigatorScenarios)
+      .where(and(eq(navigatorScenarios.projectId, params.projectId), sql`${navigatorScenarios.scenarioType} <> 'ioc'`));
     return { total: 0 };
   }
 
@@ -797,7 +799,9 @@ export async function recomputeNavigatorScenariosForUser(params: {
   const keys = scenarios.map((s) => s.scenarioKey);
 
   if (keys.length === 0) {
-    await db.delete(navigatorScenarios).where(eq(navigatorScenarios.projectId, params.projectId));
+    await db
+      .delete(navigatorScenarios)
+      .where(and(eq(navigatorScenarios.projectId, params.projectId), sql`${navigatorScenarios.scenarioType} <> 'ioc'`));
     return { total: 0 };
   }
 
@@ -857,6 +861,7 @@ export async function recomputeNavigatorScenariosForUser(params: {
     .where(
       and(
         eq(navigatorScenarios.projectId, params.projectId),
+        sql`${navigatorScenarios.scenarioType} <> 'ioc'`,
         sql`${navigatorScenarios.scenarioKey} not in (${sql.join(
           keys.map((k) => sql`${k}`),
           sql`,`

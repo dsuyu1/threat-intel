@@ -1,0 +1,80 @@
+---
+title: "KQL"
+section: "Reference"
+description: "Query fundamentals and building blocks."
+order: 1
+lastUpdated: "2026-06-07"
+---
+
+# KQL
+
+KQL is a Kusto-inspired **pipeline** query language used in the platform’s Query Console.
+It’s designed to be:
+
+- Safe (no arbitrary SQL)
+- Fast for common investigative queries
+- Strict (unknown tables/fields are rejected)
+
+Open the console at [`/data/query`](/data/query).
+
+## The pipeline model (how to read queries)
+
+KQL reads left-to-right:
+
+```kql
+Findings
+| where severity == "high"
+| sort by publishedAt desc
+| take 25
+```
+
+Think “start with a table, then refine”.
+
+## Stages (what you can use today)
+
+- `| where ...` filter rows
+- `| project ...` select a subset of columns
+- `| sort by ...` order results
+- `| take N` / `| limit N` cap the result size
+- `| summarize ... by ...` aggregate
+- `| join kind=... (...) on ...` combine two pipelines
+
+<Callout type="note">
+This KQL dialect is intentionally small. Some Kusto features (like `extend`, `ago()`, or regex operators) may not be supported yet.
+</Callout>
+
+## Where expressions
+
+Supported operators and functions:
+
+- Comparisons: `==`, `!=`, `>=`, `<=`, `>`, `<`
+- String matches: `contains`, `startswith`, `endswith`
+- Lists: `in ( ... )`
+- Null checks: `isnull(field)`, `isnotnull(field)`
+- Boolean logic: `and`, `or`, `not`
+
+Examples:
+
+```kql
+Iocs
+| where kind == "domain" and value contains "login"
+| take 50
+```
+
+```kql
+NavigatorScenarios
+| where validationStatus in ("validated", "in_progress")
+| sort by score desc
+| take 25
+```
+
+## Common error messages
+
+- **Unknown table**: table name isn’t queryable (or not allowed on your plan)
+- **Table not allowed**: the table exists, but it’s tier-gated
+- **Unknown field**: the column name isn’t in that table’s allowlist
+- **Query too deep / too complex**: join nesting or stage count limits
+
+## Next
+
+- See tables and columns: [KQL tables](/learn/reference/kql/tables)

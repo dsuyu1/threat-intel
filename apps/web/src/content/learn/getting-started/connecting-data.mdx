@@ -1,0 +1,89 @@
+---
+title: "Connecting data"
+section: "Getting Started"
+description: "Bring your sources in so findings and graphs have something to work with."
+order: 1
+lastUpdated: "2026-06-07"
+---
+
+# Connecting data
+
+Before agents can produce findings or build the graph, you need **inputs**.
+In the platform, those inputs are either:
+
+- **Sources** (RSS feeds and STIX bundle URLs), or
+- **Integrations** (scanner feeds, TheHive, Splunk, alerting webhooks, …)
+
+## 1) Open Sources
+
+Navigate to **Data → Sources** (or go directly to [`/data/sources`](/data/sources)).
+
+## 2) Add an RSS feed
+
+1. Click **Add source**.
+2. Set **Source type** to **RSS feed**.
+3. Fill in these fields:
+   - **URL**: the feed URL (must be `http(s)`), e.g. `https://unit42.paloaltonetworks.com/feed/`
+   - **Enabled**: leave enabled so agents ingest it
+   - **Display name**: optional (defaults to the hostname)
+   - **Reliability**: how much the platform should trust/weight claims from this source
+4. Click **Create source**.
+
+<Callout type="tip">
+If you’re not sure which RSS feeds to start with, the platform ships with defaults (CISA, Microsoft, Google, Unit 42, etc.). Add your own only when you have a specific source you trust.
+</Callout>
+
+## 3) Add a STIX / TAXII endpoint
+
+1. Click **Add source**.
+2. Set **Source type** to **STIX / TAXII endpoint**.
+3. For **URL**, use one of:
+   - A **direct STIX 2.x bundle** URL (JSON), or
+   - A TAXII endpoint that returns STIX objects as JSON (public/no-auth)
+4. Click **Create source**.
+
+<Callout type="note">
+The built-in **TTP agent** prefers the default MITRE ATT&amp;CK Enterprise STIX source.
+If you want it to ingest a different STIX bundle, disable the default STIX source in **Data → Sources**.
+</Callout>
+
+If you need authenticated TAXII ingestion for **IOCs**, use the IOC TAXII workflow instead (see: [Add an IOC feed](/learn/guides/add-ioc-feed)).
+
+## Enabled vs disabled
+
+- **Enabled** means the source is eligible for ingestion when agents run.
+- **Disabled** means agents will ignore it (useful for pausing noisy sources without deleting them).
+
+You can toggle enabled/disabled from the Sources table.
+
+## 4) Verify a source is working
+
+Sources don’t fetch by themselves — an agent has to run.
+
+1. Run the relevant agent:
+   - RSS → run the **Threat feed agent**
+   - STIX → run the **TTP agent**
+2. Open **Data → Documents** (or [`/data/documents`](/data/documents)).
+3. Search for the source’s hostname or URL.
+4. Confirm you see new rows with:
+   - `status = ok`
+   - a recent `fetchedAt`
+
+If `status = error`, open the row and use the error text as your next debugging step.
+
+## Integrations (scanner feeds, TheHive, Splunk)
+
+Some data sources are connected as integrations instead of “Sources”:
+
+- Vulnerability scanners (Tenable/Qualys/Rapid7): [`/integrations/vuln-scanners`](/integrations/vuln-scanners)
+- TheHive sync: [`/integrations/thehive`](/integrations/thehive)
+- Splunk push: [`/integrations/splunk`](/integrations/splunk)
+
+<Callout type="note">
+If you just signed in and everything is empty, it usually means there’s no connected data yet (or agents haven’t run).
+Start here, then run agents next.
+</Callout>
+
+## Next steps
+
+- Run agents: [Running agents](/learn/getting-started/running-agents)

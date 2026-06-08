@@ -1,0 +1,57 @@
+---
+title: "Entities"
+section: "Concepts"
+description: "How the platform identifies and stores things like CVEs, actors, and IOCs."
+order: 2
+lastUpdated: "2026-06-07"
+---
+
+# Entities
+
+An **entity** is a uniquely identified “thing” in the platform: a CVE, an actor, a technique, an IOC, a country, etc.
+Entities are the **nodes** in the [knowledge graph](/learn/concepts/knowledge-graph).
+
+## Identity: `(kind, entityId)`
+
+Every entity is identified by a pair:
+
+- `kind`: the category (e.g. `actor`, `cve`, `technique`, `ioc`)
+- `entityId`: the stable identifier within that kind
+
+Examples:
+
+- CVE: `kind="cve"`, `entityId="CVE-2025-12345"`
+- MITRE ATT&CK actor/group: `kind="actor"`, `entityId="G0102"`
+- MITRE technique: `kind="technique"`, `entityId="T1059"`
+
+<Callout type="note">
+`entityId` is not always a “nice” human ID. For some structured sources (like STIX), the identifier can be a STIX object id.
+</Callout>
+
+## What an entity stores
+
+At a high level, entities carry:
+
+- **Name**: the primary display label
+- **Aliases**: alternative spellings/names (useful for search + matching)
+- **Description**: longer narrative context (when available)
+- **Attributes**: structured JSON metadata (source-specific fields, enrichment, etc.)
+
+## Aliases and merging
+
+Real-world intel is messy: the same actor or tool can appear under multiple names.
+The platform uses:
+
+- **Aliases** to match “same thing, different name”
+- **Merges** to collapse duplicates into a canonical entity when the system is confident (or when you approve a merge)
+
+When entities are merged, relationships can be re-pointed so investigations don’t fragment across duplicates.
+
+## Where you’ll encounter entities
+
+- In graph-based views (actor → technique → mitigation, etc.)
+- In data tables like `/data/kg-entities`
+- In pages that focus on a kind (e.g. Actors)
+
+Next: understand how entities connect. Read: [Relationships & evidence](/learn/concepts/relationships-and-evidence).
+

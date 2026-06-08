@@ -1,0 +1,63 @@
+---
+title: "Triage findings"
+section: "Guides"
+description: "Filter, bulk triage, export, and send findings to downstream tools."
+order: 1
+lastUpdated: "2026-06-07"
+---
+
+# Triage findings
+
+Findings are meant to be worked like a queue: filter → decide → push to the right system (Jira/SOAR) → move on.
+
+## Open the Findings queue
+
+Go to [`/findings`](/findings).
+
+## Filter fast (band, CVSS, EPSS, PoC)
+
+Common filters that map to real urgency:
+
+- **Band**: start with “Actively exploited / KEV”, then Critical/High.
+- **CVSS range**: use CVSS to focus on higher-impact issues.
+- **EPSS**: prioritize what’s *likely* to be exploited in the wild.
+- **Has PoC**: PoC presence is a practical “time-to-exploit” signal.
+
+<Callout type="tip">
+If you’re triaging for your environment, use “KEV” and “Has PoC” as the fastest first pass, then refine by CVSS/EPSS.
+</Callout>
+
+## Keyboard shortcuts (speed)
+
+When you’re not typing in a text field:
+
+- **Shift + A**: select all visible findings (after filters)
+- **j / k**: move focus down/up the visible list
+- **Space**: toggle selection for the focused finding
+- **Enter**: open the source URL (or open the finding detail page if no source URL)
+- **Esc**: close popovers/menus
+
+## Bulk actions
+
+After selecting findings, you can:
+
+- **Mark reviewed**: you assessed it
+- **Dismiss**: not relevant / noise / already handled elsewhere
+- **Export CSV**: for offline review or reporting
+- **Create Jira ticket**: sends a payload to Jira Automation webhooks
+
+## Send to Jira (and other tools)
+
+To send findings downstream:
+
+1. Configure the integration (example: Jira Automation at [`/integrations/jira-automation`](/integrations/jira-automation)).
+2. Select findings.
+3. Click **Create Jira ticket** (or send to SOAR/Slack/Teams, depending on your connections).
+
+For payload formats, see: [Integrations payloads](/learn/reference/integrations).
+
+## Next
+
+- Learn finding fields in detail: [Finding fields](/learn/reference/findings-fields)
+- Learn how to pivot with queries: [KQL basics](/learn/guides/kql-basics)
+

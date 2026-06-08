@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@ti/db"],
+  pageExtensions: ["ts", "tsx"],
   experimental: {
     // This is a monorepo (apps/* + packages/*). Allow Next to reference files outside `apps/web`,
     // which also helps when pnpm resolves dependencies via the root `.pnpm` virtual store.

@@ -30,13 +30,15 @@ export type RunKqlResult = {
 
 export async function runKql(
   queryText: string,
-  opts?: { defaultLimit?: number; maxLimit?: number; debug?: boolean }
+  opts?: { defaultLimit?: number; maxLimit?: number; debug?: boolean; allowedTables?: string[]; projectId?: string }
 ): Promise<RunKqlResult> {
   const started = Date.now();
   const ast = parseKql(queryText);
   const compiled = compileKqlToSql(ast, {
     defaultLimit: opts?.defaultLimit,
     maxLimit: opts?.maxLimit,
+    allowedTables: opts?.allowedTables,
+    projectId: opts?.projectId,
   });
 
   const sql = getSql();
@@ -47,7 +49,7 @@ export async function runKql(
     columns: compiled.columns,
     rows,
     meta: {
-      tables: listKqlTables(),
+      tables: listKqlTables({ allowedTables: opts?.allowedTables }),
       durationMs,
       rowCount: Array.isArray(rows) ? rows.length : 0,
     },

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling>=1.24.2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "threat-intel-mcp"
+version = "0.1.0"
+description = "Threat Intel MCP server (FastMCP) for the Threat Intel platform"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "UNLICENSED" }
+authors = [{ name = "Threat Intel" }]
+dependencies = [
+  "httpx>=0.27.0",
+  "mcp>=1.0.0",
+  "pydantic>=2.7.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]
+
+[project.scripts]
+threat-intel-mcp = "threat_intel_mcp.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/threat_intel_mcp"]
+

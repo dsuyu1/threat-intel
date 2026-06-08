@@ -1,0 +1,69 @@
+---
+title: "Navigator"
+section: "Concepts"
+description: "Scenarios, scoring, coverage, and the scenario → action → detection pipeline."
+order: 8
+lastUpdated: "2026-06-07"
+proOnly: true
+---
+
+# Navigator
+
+Navigator is the platform’s CTEM-style workflow: it connects **threat actors** to **your environment** and turns that into:
+
+- Prioritized **scenarios**
+- Concrete **actions**
+- Generated **detections** (Sigma/KQL/SPL)
+
+## What a scenario is
+
+A **scenario** is a unit of modeled risk. It combines:
+
+- An **actor** (who)
+- A **target** (your stack / assets / detections) (what you run)
+- A **technique**, CVE, or IOC signal (how)
+
+The output is a score you can sort and work down.
+
+## Scoring (FAIR-lite, in plain terms)
+
+Navigator uses a “FAIR-lite” framing for stakeholder-friendly estimates:
+
+- **SLE (single loss expectancy)**: impact if it happens once (loss magnitude)
+- **ARO (annual rate of occurrence)**: how often you expect it per year (loss event frequency)
+- **ALE (annualized loss expectancy)**: SLE × ARO
+
+In the product, you’ll see these represented as:
+
+- **Loss event frequency (per year)** (ARO/LEF)
+- **Loss magnitude low/high** (SLE range)
+- A derived annualized range (ALE)
+
+## What a detection is
+
+A **detection** is a rule generated for a technique:
+
+- **Sigma** (portable)
+- **KQL** (Microsoft/Sentinel-style)
+- **SPL** (Splunk-style)
+
+Detections are tied back to scenarios so you can measure “coverage”.
+
+## The scenario → action → detection pipeline
+
+1. **Scenario**: the modeled risk unit
+2. **Action**: what you should do next (instrument, investigate, deploy a control)
+3. **Detection**: an executable rule for the technique (generated and tracked over time)
+
+## What “coverage” means
+
+Coverage is a shorthand for “how much of this scenario’s technique surface area is detectable”.
+At a high level:
+
+- 0% coverage: no detections exist for relevant techniques
+- Higher coverage: more techniques have at least one detection and/or completed actions
+
+<Callout type="tip">
+If you want to improve coverage quickly, start by generating detections for the top scenarios and deploying them into your SIEM.
+</Callout>
+

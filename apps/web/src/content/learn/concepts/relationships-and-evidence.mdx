@@ -1,0 +1,70 @@
+---
+title: "Relationships & evidence"
+section: "Concepts"
+description: "How the platform links entities, scores those links, and keeps them traceable."
+order: 3
+lastUpdated: "2026-06-07"
+---
+
+# Relationships & evidence
+
+Relationships are the “edges” of the [knowledge graph](/learn/concepts/knowledge-graph): they connect two [entities](/learn/concepts/entities).
+Evidence is what makes those edges verifiable.
+
+## Relationship shape
+
+A relationship is defined by:
+
+- `type`: the meaning of the connection (e.g. `actor_uses_technique`)
+- `fromKind/fromId` → `toKind/toId`: the directed endpoints
+- `firstSeen` / `lastSeen`: time bounds for when the relationship was observed
+- `support`: how much backing the relationship has (higher = stronger signal)
+- `confidence`: 0–1 quality/probability signal (higher = more likely correct)
+- `attributes`: provenance metadata (where it came from, ids from upstream systems, etc.)
+
+Example (conceptually):
+
+- `type="actor_uses_technique"`
+- `fromKind="actor"`, `fromId="G0102"`
+- `toKind="technique"`, `toId="T1059"`
+
+## Support vs confidence
+
+These two numbers answer different questions:
+
+- **Confidence (0–1)**: “How likely is this edge correct?”
+- **Support (≥ 0)**: “How much backing does this edge have?”
+
+In practice:
+
+- A structured source (like STIX) may yield **high confidence** edges with consistent **support**.
+- An extracted claim from a single article might be **high confidence** but low support (or vice versa).
+
+Some ranking logic multiplies them (e.g. `support * confidence`) to prioritize “strong and confident” edges.
+
+## Evidence
+
+Evidence is attached to a relationship as:
+
+- A source **URL**
+- A short **excerpt**
+- Optionally, a **publish timestamp**
+- A per-evidence **confidence**
+
+Evidence answers: “Why does the system think this relationship exists?”
+
+<Callout type="tip">
+If an edge surprises you, look for its evidence first. Evidence is the fastest way to confirm, refute, or adjust trust.
+</Callout>
+
+## Provenance (attributes)
+
+Not every relationship has a readable excerpt — especially edges imported from structured sources.
+In those cases, the system still stores provenance in `attributes` (for example, the upstream relationship id and source kind),
+so you can trace where it came from.
+
+## Next steps
+
+- Read: [Findings](/learn/concepts/findings) to understand the other major output stream.
+- Or jump to: [Sources & documents](/learn/concepts/sources-and-documents) to see where evidence originates.
+

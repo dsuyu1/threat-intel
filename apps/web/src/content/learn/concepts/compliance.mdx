@@ -1,0 +1,52 @@
+---
+title: "Compliance"
+section: "Concepts"
+description: "Frameworks, control mappings, and using coverage as audit evidence."
+order: 12
+lastUpdated: "2026-06-07"
+proOnly: true
+---
+
+# Compliance
+
+Compliance in the platform is built on the same primitives as Navigator:
+
+- Scenarios (what matters)
+- Actions and detections (what you’ve done)
+- Mappings (how that work supports controls)
+
+## Supported frameworks
+
+Today, the platform supports:
+
+- NIST CSF 2.0 (`nist_csf_2`)
+- CIS Controls v8 (`cis_v8`)
+- ISO 27001 (`iso_27001`)
+
+<Callout type="note">
+If your framework isn’t listed (e.g. SOC 2), you can still track coverage using your own control IDs, but built-in catalogs and labels may be limited.
+</Callout>
+
+## How controls are mapped
+
+Controls can be mapped to:
+
+- A **scenario** (directly)
+- A **technique** (and then rolled up to scenarios)
+- A **mitigation** (and then rolled up to techniques/scenarios)
+
+This makes the mapping both auditable and operationally useful.
+
+## Using compliance coverage as an audit artifact
+
+Coverage can be used as an exportable “proof of work”:
+
+- Which scenarios are mapped to which controls
+- Which of those scenarios have detections/actions in place
+- Where gaps exist (high residual risk, low coverage)
+
+## Relationship between compliance and Navigator
+
+- Navigator prioritizes what to work on next.
+- Compliance translates that work into a controls-and-evidence narrative.
+

@@ -136,7 +136,6 @@ export async function ensureDefaultSources(): Promise<void> {
       set: {
         name: sql`excluded.name`,
         type: sql`excluded.type`,
-        reliability: sql`excluded.reliability`,
         updatedAt: now,
       },
     });

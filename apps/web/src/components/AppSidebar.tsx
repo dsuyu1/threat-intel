@@ -21,8 +21,13 @@ function projectizeHref(href: string, projectSlug: string | null) {
   if (!projectSlug) return href;
   if (href === "/") return `/p/${projectSlug}`;
   if (href === "/navigator" || href.startsWith("/navigator/")) return `/p/${projectSlug}${href}`;
+  if (href === "/iocs" || href.startsWith("/iocs/")) return `/p/${projectSlug}${href}`;
   if (href === "/risk" || href.startsWith("/risk/")) return `/p/${projectSlug}${href}`;
   if (href === "/playbooks" || href.startsWith("/playbooks/")) return `/p/${projectSlug}${href}`;
+  if (href === "/sbom" || href.startsWith("/sbom/")) return `/p/${projectSlug}${href}`;
+  if (href === "/tabletop" || href.startsWith("/tabletop/")) return `/p/${projectSlug}${href}`;
+  if (href === "/api-keys" || href.startsWith("/api-keys/")) return `/p/${projectSlug}${href}`;
+  if (href === "/learn" || href.startsWith("/learn/")) return `/p/${projectSlug}${href}`;
   return href;
 }
 

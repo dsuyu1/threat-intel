@@ -1,0 +1,82 @@
+---
+title: "Knowledge graph"
+section: "Concepts"
+description: "How entities and relationships form the backbone of investigations."
+order: 1
+lastUpdated: "2026-06-07"
+---
+
+# Knowledge graph
+
+The knowledge graph connects **entities** (actors, CVEs, techniques, IOCs, …) with **relationships** and **evidence**.
+It’s the “single connected model” behind investigations.
+
+## What’s in the graph?
+
+### Entities (nodes)
+
+An entity is a uniquely identified “thing” in the system.
+Examples include:
+
+- An actor (`kind="actor"`, like `G0102`)
+- A CVE (`kind="cve"`, like `CVE-2025-12345`)
+- A MITRE ATT&CK technique (`kind="technique"`, like `T1059`)
+- An IOC (`kind="ioc"`, internal id that represents an indicator value)
+
+Read: [Entities](/learn/concepts/entities)
+
+### Relationships (edges)
+
+Relationships are typed, directed links between two entities.
+Examples:
+
+- `actor_uses_technique` (actor → technique)
+- `actor_exploits_cve` (actor → cve)
+- `ioc_indicates_actor` (ioc → actor)
+
+Relationships include:
+
+- **support** (how much backing a relation has)
+- **confidence** (0–1 quality/probability signal)
+- **firstSeen / lastSeen** (time bounds)
+
+Read: [Relationships & evidence](/learn/concepts/relationships-and-evidence)
+
+### Evidence (traceability)
+
+Evidence is what makes the graph usable for real decisions:
+an excerpt + URL (and often a publish time) attached to a relationship.
+
+Some relationships come from structured sources (like STIX) and may not have a human-friendly excerpt,
+but the system still tracks provenance via attributes.
+
+## How the graph gets built
+
+The graph is a merge of multiple pipelines:
+
+- **Structured ingestion** (e.g. STIX / TAXII) creates entities and relationships directly.
+- **Document extraction** (e.g. RSS articles) can create findings and “bridge” relationships between entities.
+- **Merging / aliasing** helps collapse duplicates and make search work (e.g. synonyms for actor names).
+
+## Where to explore it
+
+- In the product UI (project “Knowledge graph” views)
+- In **Data explorer** tables (useful for debugging):
+  - `/data/kg-entities`
+  - `/data/kg-relations`
+
+## Why no data?
+
+If you’re viewing the graph and it looks empty:
+
+- You may not have connected any sources yet.
+- Agents may not have run (or produced outputs) yet.
+
+Start with:
+
+- [Connecting data](/learn/getting-started/connecting-data)
+- [Running agents](/learn/getting-started/running-agents)
+
+<Callout type="note">
+If you’re signed in but you don’t see entities, check **Sources** and **Documents** first — the graph is downstream of ingestion.
+</Callout>

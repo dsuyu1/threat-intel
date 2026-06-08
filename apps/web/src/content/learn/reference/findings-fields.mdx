@@ -1,0 +1,69 @@
+---
+title: "Finding fields"
+section: "Reference"
+description: "Every field on a finding, what it means, and where it comes from."
+order: 3
+lastUpdated: "2026-06-07"
+---
+
+# Finding fields
+
+This page documents the fields stored on a finding and how to interpret them.
+
+## Core fields
+
+- `id`: internal UUID
+- `agent`: which agent produced the finding (`vuln`, `attack`, `exploit`, `malware`, `ttp`)
+- `title`: short human-readable title
+- `summary`: optional AI-generated summary (may be null)
+- `rawData`: optional JSON string of the original source payload (when available)
+
+## Severity and scoring
+
+- `severity`: one of `critical|high|medium|low|info` (agent-derived)
+- `cvssScore`: CVSS base score (if available)
+- `cvssVector`: CVSS vector string (if available)
+
+### EPSS fields
+
+EPSS is an external score from FIRST.org (probability of exploitation in the wild).
+
+- `epssScore`: probability (0–1)
+- `epssPercentile`: percentile (0–1)
+- `epssUpdatedAt`: when EPSS enrichment last ran
+
+Use EPSS alongside CVSS and KEV; it’s not a guarantee.
+
+## CVE and ATT&CK context
+
+- `cveId`: CVE identifier (e.g., `CVE-2024-12345`)
+- `mitreIds`: comma-separated ATT&CK technique IDs (e.g., `T1059,T1059.001`)
+
+## Tags
+
+`tags` is stored as a JSON array string. It’s used for filtering and UI badges.
+
+Common tags:
+
+- `kev`: in CISA KEV catalog
+- `actively-exploited`: explicit exploitation signal
+- `githubpoc`: PoC found on GitHub
+
+Agents may add additional tags (vendors, products, sectors, etc.).
+
+## Source fields
+
+- `sourceUrl`: the source URL for the finding (RSS item URL, advisory URL, etc.)
+- `sourceTitle`: the source title (if available)
+
+## Exploit / PoC fields
+
+- `pocUrl`: proof-of-concept URL (if available)
+- `pocLevel`: a qualitative signal (`poc|functional|itw`)
+- `disclosureToExploitHours`: time-to-exploit metric (hours) when the platform can compute it
+
+## Timestamps
+
+- `publishedAt`: when the source was published (if available)
+- `createdAt`: when the row was created in the database
+

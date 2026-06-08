@@ -7,6 +7,13 @@ export type CompiledKql = {
   columns: string[];
 };
 
+export type KqlCompileOptions = {
+  defaultLimit?: number;
+  maxLimit?: number;
+  allowedTables?: string[];
+  projectId?: string;
+};
+
 type Plan = {
   sql: string;
   params: any[];
@@ -40,11 +47,26 @@ type TableDef = {
   name: string;
   sql: string;
   columns: string[];
+  projectScope?: TableProjectScope;
 };
 
+type TableProjectScope =
+  | { kind: "column"; column: string }
+  | {
+      kind: "exists";
+      table: string;
+      projectIdColumn: string;
+      localColumn: string;
+      remoteColumn: string;
+    };
+
+function normalizeTableName(name: string) {
+  return String(name ?? "").trim().toLowerCase();
+}
+
 const TABLES: Record<string, TableDef> = {
-  Entities: {
-    name: "Entities",
+  KgEntities: {
+    name: "KgEntities",
     columns: ["kind", "entityId", "name", "aliases", "description", "attributes", "createdAt", "updatedAt"],
     sql: `
       SELECT
@@ -144,8 +166,8 @@ const TABLES: Record<string, TableDef> = {
       LEFT JOIN origin o ON o."actorId" = a."actorId"
     `.trim(),
   },
-  Relations: {
-    name: "Relations",
+  KgRelations: {
+    name: "KgRelations",
     columns: [
       "relationId",
       "type",
@@ -175,8 +197,8 @@ const TABLES: Record<string, TableDef> = {
       FROM kg_relations
     `.trim(),
   },
-  Evidence: {
-    name: "Evidence",
+  KgEvidence: {
+    name: "KgEvidence",
     columns: ["evidenceId", "relationId", "documentId", "chunkId", "excerpt", "url", "publishedAt", "confidence", "createdAt"],
     sql: `
       SELECT
@@ -190,6 +212,17 @@ const TABLES: Record<string, TableDef> = {
         confidence AS "confidence",
         created_at AS "createdAt"
       FROM kg_evidence
+    `.trim(),
+  },
+  ActorProfiles: {
+    name: "ActorProfiles",
+    columns: ["actorId", "profileText", "updatedAt"],
+    sql: `
+      SELECT
+        actor_id AS "actorId",
+        profile_text AS "profileText",
+        updated_at AS "updatedAt"
+      FROM actor_profiles
     `.trim(),
   },
   Documents: {
@@ -210,6 +243,13 @@ const TABLES: Record<string, TableDef> = {
   },
   Findings: {
     name: "Findings",
+    projectScope: {
+      kind: "exists",
+      table: "project_finding_stack_matches",
+      projectIdColumn: "project_id",
+      localColumn: "id",
+      remoteColumn: "finding_id",
+    },
     columns: [
       "id",
       "agent",
@@ -218,6 +258,9 @@ const TABLES: Record<string, TableDef> = {
       "severity",
       "cvssScore",
       "cvssVector",
+      "epssScore",
+      "epssPercentile",
+      "epssUpdatedAt",
       "cveId",
       "mitreIds",
       "tags",
@@ -238,6 +281,9 @@ const TABLES: Record<string, TableDef> = {
         severity AS "severity",
         cvss_score AS "cvssScore",
         cvss_vector AS "cvssVector",
+        epss_score AS "epssScore",
+        epss_percentile AS "epssPercentile",
+        epss_updated_at AS "epssUpdatedAt",
         cve_id AS "cveId",
         mitre_ids AS "mitreIds",
         tags AS "tags",
@@ -249,6 +295,183 @@ const TABLES: Record<string, TableDef> = {
         published_at AS "publishedAt",
         created_at AS "createdAt"
       FROM findings
+    `.trim(),
+  },
+  Iocs: {
+    name: "Iocs",
+    projectScope: { kind: "column", column: "projectId" },
+    columns: ["id", "projectId", "kind", "value", "normalized", "tags", "firstSeenAt", "lastSeenAt", "createdAt", "updatedAt"],
+    sql: `
+      SELECT
+        id AS "id",
+        project_id AS "projectId",
+        kind AS "kind",
+        value AS "value",
+        normalized AS "normalized",
+        tags AS "tags",
+        first_seen_at AS "firstSeenAt",
+        last_seen_at AS "lastSeenAt",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM iocs
+    `.trim(),
+  },
+  Playbooks: {
+    name: "Playbooks",
+    projectScope: { kind: "column", column: "projectId" },
+    columns: [
+      "id",
+      "projectId",
+      "sourceKind",
+      "sourceId",
+      "incidentType",
+      "title",
+      "status",
+      "contentFormat",
+      "approvedAt",
+      "createdAt",
+      "updatedAt",
+    ],
+    sql: `
+      SELECT
+        id AS "id",
+        project_id AS "projectId",
+        source_kind AS "sourceKind",
+        source_id AS "sourceId",
+        incident_type AS "incidentType",
+        title AS "title",
+        status AS "status",
+        content_format AS "contentFormat",
+        approved_at AS "approvedAt",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM playbooks
+    `.trim(),
+  },
+  NavigatorScenarios: {
+    name: "NavigatorScenarios",
+    projectScope: { kind: "column", column: "projectId" },
+    columns: [
+      "id",
+      "projectId",
+      "userId",
+      "scenarioKey",
+      "scenarioType",
+      "actorId",
+      "actorName",
+      "targetKind",
+      "targetId",
+      "targetName",
+      "inferredFromActorId",
+      "title",
+      "summary",
+      "rawPriority",
+      "score",
+      "primaryTactic",
+      "validationStatus",
+      "computedAt",
+    ],
+    sql: `
+      SELECT
+        id AS "id",
+        project_id AS "projectId",
+        user_id AS "userId",
+        scenario_key AS "scenarioKey",
+        scenario_type AS "scenarioType",
+        actor_id AS "actorId",
+        actor_name AS "actorName",
+        target_kind AS "targetKind",
+        target_id AS "targetId",
+        target_name AS "targetName",
+        inferred_from_actor_id AS "inferredFromActorId",
+        title AS "title",
+        summary AS "summary",
+        raw_priority AS "rawPriority",
+        score AS "score",
+        primary_tactic AS "primaryTactic",
+        validation_status AS "validationStatus",
+        computed_at AS "computedAt"
+      FROM navigator_scenarios
+    `.trim(),
+  },
+  NavigatorDetections: {
+    name: "NavigatorDetections",
+    projectScope: { kind: "column", column: "projectId" },
+    columns: [
+      "id",
+      "projectId",
+      "userId",
+      "scenarioId",
+      "techniqueId",
+      "techniqueName",
+      "format",
+      "content",
+      "model",
+      "lifecycleStatus",
+      "reviewedAt",
+      "deployedAt",
+      "retiredAt",
+      "createdAt",
+      "updatedAt",
+    ],
+    sql: `
+      SELECT
+        id AS "id",
+        project_id AS "projectId",
+        user_id AS "userId",
+        scenario_id AS "scenarioId",
+        technique_id AS "techniqueId",
+        technique_name AS "techniqueName",
+        format AS "format",
+        content AS "content",
+        model AS "model",
+        lifecycle_status AS "lifecycleStatus",
+        reviewed_at AS "reviewedAt",
+        deployed_at AS "deployedAt",
+        retired_at AS "retiredAt",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM navigator_detections
+    `.trim(),
+  },
+  RiskEntries: {
+    name: "RiskEntries",
+    projectScope: { kind: "column", column: "projectId" },
+    columns: [
+      "id",
+      "projectId",
+      "userId",
+      "scenarioId",
+      "status",
+      "category",
+      "owner",
+      "notes",
+      "fairLef",
+      "fairLmLow",
+      "fairLmHigh",
+      "acceptedAt",
+      "closedAt",
+      "createdAt",
+      "updatedAt",
+    ],
+    sql: `
+      SELECT
+        id AS "id",
+        project_id AS "projectId",
+        user_id AS "userId",
+        scenario_id AS "scenarioId",
+        status AS "status",
+        category AS "category",
+        owner AS "owner",
+        notes AS "notes",
+        fair_lef AS "fairLef",
+        fair_lm_low AS "fairLmLow",
+        fair_lm_high AS "fairLmHigh",
+        accepted_at AS "acceptedAt",
+        closed_at AS "closedAt",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM risk_entries
     `.trim(),
   },
   Sources: {
@@ -272,27 +495,50 @@ const TABLES: Record<string, TableDef> = {
   },
 };
 
-export function listKqlTables() {
-  return Object.keys(TABLES).sort((a, b) => a.localeCompare(b));
+const TABLE_ALIASES: Record<string, string> = {
+  entities: "KgEntities",
+  relations: "KgRelations",
+  evidence: "KgEvidence",
+};
+
+export function listKqlTables(opts?: { allowedTables?: string[] }) {
+  const all = Object.keys(TABLES).sort((a, b) => a.localeCompare(b));
+  const allowed = (opts?.allowedTables ?? []).map(normalizeTableName).filter(Boolean);
+  if (!allowed.length) return all;
+  const allow = new Set(allowed);
+  return all.filter((t) => allow.has(normalizeTableName(t)));
 }
 
-export function compileKqlToSql(query: KqlQuery, opts?: { defaultLimit?: number; maxLimit?: number }): CompiledKql {
+export function getKqlTableSchemas(opts?: { allowedTables?: string[] }) {
+  const allowed = (opts?.allowedTables ?? []).map(normalizeTableName).filter(Boolean);
+  const allow = allowed.length ? new Set(allowed) : null;
+  return Object.values(TABLES)
+    .filter((t) => (allow ? allow.has(normalizeTableName(t.name)) : true))
+    .map((t) => ({ name: t.name, columns: [...t.columns] }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function compileKqlToSql(query: KqlQuery, opts?: KqlCompileOptions): CompiledKql {
   const defaultLimit = Math.max(1, Math.floor(opts?.defaultLimit ?? 200));
   const maxLimit = Math.max(defaultLimit, Math.floor(opts?.maxLimit ?? 2000));
+  const allowedTables = (opts?.allowedTables ?? []).map(normalizeTableName).filter(Boolean);
+  const allow = allowedTables.length ? new Set(allowedTables) : null;
 
-  const plan = compileQuery(query, { defaultLimit, maxLimit }, { isRoot: true, depth: 0 });
+  const projectId = String(opts?.projectId ?? "").trim() || null;
+  const plan = compileQuery(query, { defaultLimit, maxLimit }, { isRoot: true, depth: 0, projectId }, allow);
   return { sql: plan.sql, params: plan.params, columns: plan.columns };
 }
 
 function compileQuery(
   query: KqlQuery,
   limits: { defaultLimit: number; maxLimit: number },
-  ctx: { isRoot: boolean; depth: number }
+  ctx: { isRoot: boolean; depth: number; projectId: string | null },
+  allow: Set<string> | null
 ): Plan {
   if (ctx.depth > 4) throw new KqlError("Query too deep (max join nesting is 4)");
   if (query.stages.length > 50) throw new KqlError("Query too complex (too many stages)");
 
-  const def = resolveTable(query.table);
+  const def = resolveTable(query.table, allow);
 
   let plan: Plan = {
     sql: def.sql,
@@ -300,10 +546,15 @@ function compileQuery(
     columns: [...def.columns],
   };
 
+  if (def.projectScope) {
+    if (!ctx.projectId) throw new KqlError("Missing project scope");
+    plan = applyProjectScope(plan, def.projectScope, ctx.projectId);
+  }
+
   let hasExplicitLimit = false;
 
   for (const stage of query.stages) {
-    const res = applyStage(plan, stage, limits, ctx);
+    const res = applyStage(plan, stage, limits, ctx, allow);
     plan = res.plan;
     if (res.addedLimit) hasExplicitLimit = true;
   }
@@ -316,11 +567,27 @@ function compileQuery(
   return plan;
 }
 
-function resolveTable(name: string): TableDef {
+function resolveTable(name: string, allow: Set<string> | null): TableDef {
   const direct = TABLES[name];
-  if (direct) return direct;
-  const key = Object.keys(TABLES).find((k) => k.toLowerCase() === name.toLowerCase());
-  if (key) return TABLES[key]!;
+  if (direct) {
+    if (allow && !allow.has(normalizeTableName(name))) throw new KqlError(`Table not allowed: ${direct.name}`);
+    return direct;
+  }
+
+  const alias = TABLE_ALIASES[normalizeTableName(name)];
+  if (alias) {
+    const def = TABLES[alias];
+    if (def) {
+      if (allow && !allow.has(normalizeTableName(alias))) throw new KqlError(`Table not allowed: ${def.name}`);
+      return def;
+    }
+  }
+
+  const key = Object.keys(TABLES).find((k) => normalizeTableName(k) === normalizeTableName(name));
+  if (key) {
+    if (allow && !allow.has(normalizeTableName(key))) throw new KqlError(`Table not allowed: ${TABLES[key]!.name}`);
+    return TABLES[key]!;
+  }
   throw new KqlError(`Unknown table: ${name}`);
 }
 
@@ -328,7 +595,8 @@ function applyStage(
   plan: Plan,
   stage: KqlStage,
   limits: { defaultLimit: number; maxLimit: number },
-  ctx: { isRoot: boolean; depth: number }
+  ctx: { isRoot: boolean; depth: number; projectId: string | null },
+  allow: Set<string> | null
 ): { plan: Plan; addedLimit: boolean } {
   switch (stage.type) {
     case "where":
@@ -342,7 +610,10 @@ function applyStage(
     case "sort":
       return { plan: applySort(plan, stage.items), addedLimit: false };
     case "join":
-      return { plan: applyJoin(plan, stage.kind, stage.right, stage.on, limits, { depth: ctx.depth + 1 }), addedLimit: false };
+      return {
+        plan: applyJoin(plan, stage.kind, stage.right, stage.on, limits, { depth: ctx.depth + 1, projectId: ctx.projectId }, allow),
+        addedLimit: false,
+      };
     case "summarize":
       return { plan: applySummarize(plan, stage.aggs, stage.by), addedLimit: false };
     default:
@@ -359,6 +630,21 @@ function clampLimit(n: number, max: number) {
 
 function selectList(alias: string, cols: string[]) {
   return cols.map((c) => `${alias}.${qIdent(c)} AS ${qIdent(c)}`).join(", ");
+}
+
+function applyProjectScope(plan: Plan, scope: TableProjectScope, projectId: string): Plan {
+  const b = new SqlParams(plan.params);
+  const projectPh = b.add(projectId);
+
+  let predicate = "";
+  if (scope.kind === "column") {
+    predicate = `t.${qIdent(scope.column)} = ${projectPh}`;
+  } else {
+    predicate = `EXISTS (SELECT 1 FROM ${qIdent(scope.table)} AS scope WHERE scope.${qIdent(scope.projectIdColumn)} = ${projectPh} AND scope.${qIdent(scope.remoteColumn)} = t.${qIdent(scope.localColumn)})`;
+  }
+
+  const sql = `SELECT ${selectList("t", plan.columns)} FROM (${plan.sql}) AS t WHERE ${predicate}`;
+  return { sql, params: b.params, columns: plan.columns };
 }
 
 function applyWhere(plan: Plan, expr: KqlExpr): Plan {
@@ -409,9 +695,10 @@ function applyJoin(
   right: KqlQuery,
   on: any,
   limits: { defaultLimit: number; maxLimit: number },
-  ctx: { depth: number }
+  ctx: { depth: number; projectId: string | null },
+  allow: Set<string> | null
 ): Plan {
-  const planRight = compileQuery(right, limits, { isRoot: false, depth: ctx.depth });
+  const planRight = compileQuery(right, limits, { isRoot: false, depth: ctx.depth, projectId: ctx.projectId }, allow);
 
   const rightSql = shiftPlaceholders(planRight.sql, planLeft.params.length);
   const params = [...planLeft.params, ...planRight.params];

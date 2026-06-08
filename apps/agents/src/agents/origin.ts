@@ -40,24 +40,30 @@ function countryName(iso2: string): string {
   }
 }
 
-async function ensureMitreDocument(stixUrl: string): Promise<string> {
+async function ensureMitreDocument(params: { stixUrl: string; sourceId: string | null }): Promise<string> {
   const db = getDb();
   const existing = await db
-    .select({ id: documents.id })
+    .select({ id: documents.id, sourceId: documents.sourceId })
     .from(documents)
-    .where(eq(documents.url, stixUrl))
+    .where(eq(documents.url, params.stixUrl))
     .limit(1);
-  if (existing[0]?.id) return existing[0].id;
+  if (existing[0]?.id) {
+    if (!existing[0].sourceId && params.sourceId) {
+      await db.update(documents).set({ sourceId: params.sourceId }).where(eq(documents.id, existing[0].id));
+    }
+    return existing[0].id;
+  }
 
-  const hash = crypto.createHash("sha256").update(stixUrl).digest("hex");
+  const hash = crypto.createHash("sha256").update(params.stixUrl).digest("hex");
   const inserted = await db
     .insert(documents)
     .values({
-      url: stixUrl,
+      url: params.stixUrl,
       title: "MITRE ATT&CK Enterprise STIX",
       contentHash: hash,
       cleanText: null,
       status: "ok",
+      sourceId: params.sourceId,
     })
     .returning({ id: documents.id });
   return inserted[0]!.id;
@@ -296,7 +302,10 @@ export async function runOriginAgent() {
   const db = getDb();
 
   const stixSource = await getStixSource();
-  const mitreDocId = await ensureMitreDocument(stixSource?.url ?? DEFAULT_STIX_SOURCE.url);
+  const mitreDocId = await ensureMitreDocument({
+    stixUrl: stixSource?.url ?? DEFAULT_STIX_SOURCE.url,
+    sourceId: stixSource?.id ?? null,
+  });
   const mispDocId = await ensureDocument({ url: MISP_GALAXY_URL, title: "MISP Galaxy - Threat Actors" });
 
   const actors = await db

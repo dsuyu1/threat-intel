@@ -1,0 +1,52 @@
+---
+title: "Integrations"
+section: "Concepts"
+description: "Webhooks, push integrations, pull integrations, and when each fires."
+order: 13
+lastUpdated: "2026-06-07"
+---
+
+# Integrations
+
+Integrations connect the platform to the rest of your security stack.
+
+At a high level, integrations fall into three buckets:
+
+## Webhooks (event delivery)
+
+Webhooks send a payload when something happens, for example:
+
+- A new finding matches criteria
+- You manually select findings and “send to …”
+
+Examples: Slack, Microsoft Teams, Discord, SOAR webhooks, Jira Automation webhooks.
+
+## Pull integrations (we ingest your system)
+
+Pull integrations periodically read from another system and bring data into the platform.
+
+Examples:
+
+- Vulnerability scanners (Tenable / Qualys / Rapid7)
+- TheHive cases → incident metrics
+
+## Push integrations (we push into your system)
+
+Push integrations write into other systems, often on-demand or on a schedule.
+
+Examples:
+
+- Splunk push (send detections/findings into Splunk)
+
+## When each integration fires
+
+- **Slack / Teams / Discord**: when you explicitly send findings (or when automation criteria match, depending on connection settings)
+- **SOAR webhooks**: send a structured JSON payload to your automation system
+- **Jira automation**: send a JSON payload intended for Jira Automation to create issues
+- **Email digest**: periodic summary email (configured per user)
+
+## Next
+
+- Task-oriented setup: [Set up alerts](/learn/guides/set-up-alerts)
+- Payload formats: [Integrations payloads](/learn/reference/integrations)
+

@@ -11,7 +11,7 @@ import crypto from "node:crypto";
 import { getDb, findings, kgEntities } from "@ti/db";
 import { sql } from "drizzle-orm";
 import { summarizeVuln } from "../lib/ai.js";
-import { dispatchJiraAutomationForFindingId } from "../lib/jira-automation.js";
+import { runPostFindingHooks } from "../lib/finding-hooks.js";
 
 // ─── NVD Types ────────────────────────────────────────────────────────────────
 
@@ -276,7 +276,7 @@ export async function runVulnAgent() {
 
       if (res.length) {
         inserted++;
-        await dispatchJiraAutomationForFindingId(db as any, res[0]!.id);
+        await runPostFindingHooks(db as any, res[0]!.id);
       } else {
         skipped++;
       }

@@ -7,6 +7,7 @@ type ActionRow = {
   id: string;
   title: string;
   status: string;
+  slaTier: string;
   dueDate: string | Date | null;
 };
 
@@ -17,11 +18,20 @@ function toDateInputValue(d: string | Date | null) {
   return dt.toISOString().slice(0, 10);
 }
 
+function isOverdue(action: { status: string; dueDate: string | Date | null }) {
+  if (action.status === "done") return false;
+  if (!action.dueDate) return false;
+  const dt = action.dueDate instanceof Date ? action.dueDate : new Date(action.dueDate);
+  if (!Number.isFinite(dt.getTime())) return false;
+  return dt.getTime() < Date.now();
+}
+
 export function ScenarioActions(props: { projectSlug: string; scenarioId: string; initialActions: ActionRow[] }) {
   const router = useRouter();
   const [actions, setActions] = useState<ActionRow[]>(props.initialActions ?? []);
   const [title, setTitle] = useState("");
   const [due, setDue] = useState("");
+  const [slaTier, setSlaTier] = useState("high");
   const [busy, setBusy] = useState(false);
 
   const sorted = useMemo(() => {
@@ -42,12 +52,14 @@ export function ScenarioActions(props: { projectSlug: string; scenarioId: string
         body: JSON.stringify({
           scenarioId: props.scenarioId,
           title: t,
-          dueDate: due ? new Date(due).toISOString() : null,
+          slaTier,
+          ...(due ? { dueDate: new Date(due).toISOString() } : {}),
         }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? `Request failed (${res.status})`);
       setTitle("");
       setDue("");
+      setSlaTier("high");
       router.refresh();
     } finally {
       setBusy(false);
@@ -95,7 +107,11 @@ export function ScenarioActions(props: { projectSlug: string; scenarioId: string
           {sorted.map((a) => (
             <div
               key={a.id}
-              className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-black/20 px-3 py-3 flex items-center gap-3"
+              className={`rounded-lg border px-3 py-3 flex items-center gap-3 ${
+                isOverdue(a)
+                  ? "border-rose-200 dark:border-rose-900 bg-rose-50/40 dark:bg-rose-950/20"
+                  : "border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-black/20"
+              }`}
             >
               <select
                 className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-black/40 px-2 py-1 text-sm"
@@ -108,8 +124,27 @@ export function ScenarioActions(props: { projectSlug: string; scenarioId: string
                 <option value="done">done</option>
               </select>
 
+              <select
+                className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-black/40 px-2 py-1 text-sm"
+                value={a.slaTier}
+                onChange={(e) => patchAction(a.id, { slaTier: e.target.value })}
+                disabled={busy}
+              >
+                <option value="critical">critical</option>
+                <option value="high">high</option>
+                <option value="medium">medium</option>
+                <option value="low">low</option>
+              </select>
+
               <div className="min-w-0 flex-1">
-                <div className="text-sm text-zinc-900 dark:text-zinc-100 truncate">{a.title}</div>
+                <div className="text-sm text-zinc-900 dark:text-zinc-100 truncate">
+                  {a.title}
+                  {isOverdue(a) ? (
+                    <span className="ml-2 inline-flex items-center rounded-full border border-rose-200 dark:border-rose-900 bg-rose-100/60 dark:bg-rose-950/40 px-2 py-0.5 text-[10px] font-medium text-rose-700 dark:text-rose-300">
+                      overdue
+                    </span>
+                  ) : null}
+                </div>
                 <div className="mt-1 text-xs text-zinc-500">
                   due{" "}
                   <input
@@ -155,6 +190,17 @@ export function ScenarioActions(props: { projectSlug: string; scenarioId: string
           className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-black/40 px-3 py-2 text-sm"
           disabled={busy}
         />
+        <select
+          value={slaTier}
+          onChange={(e) => setSlaTier(e.target.value)}
+          className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-black/40 px-3 py-2 text-sm"
+          disabled={busy}
+        >
+          <option value="critical">critical (24h)</option>
+          <option value="high">high (7d)</option>
+          <option value="medium">medium (30d)</option>
+          <option value="low">low (90d)</option>
+        </select>
         <button
           type="button"
           onClick={createAction}

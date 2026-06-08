@@ -1,0 +1,41 @@
+---
+title: "Generate detections"
+section: "Guides"
+description: "Create a Navigator scenario, generate Sigma/KQL/SPL rules, and deploy to Splunk."
+order: 7
+lastUpdated: "2026-06-07"
+proOnly: true
+---
+
+# Generate detections
+
+Detections are generated from Navigator technique scenarios and stored with lifecycle state (draft → deployed).
+
+## 1) Open Navigator
+
+Go to [`/navigator`](/navigator).
+
+## 2) Pick a scenario and technique
+
+Open a scenario, then drill into a technique where you want detection coverage.
+
+## 3) Generate detections
+
+In the **Detections** section, click **Generate now**.
+The platform can generate:
+
+- Sigma
+- Sentinel-style KQL
+- Splunk SPL
+
+## 4) Review and manage lifecycle
+
+Treat generated detections like code:
+
+- Review (peer review if your process requires it)
+- Mark lifecycle state (draft / peer-reviewed / deployed / monitoring / retired)
+
+## 5) Deploy to Splunk (optional)
+
+If Splunk is connected, you can evaluate and deploy SPL detections directly from the UI.
+

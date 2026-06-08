@@ -1,0 +1,69 @@
+---
+title: "KQL basics"
+section: "Guides"
+description: "Write your first query and learn the most common patterns."
+order: 3
+lastUpdated: "2026-06-07"
+---
+
+# KQL basics
+
+KQL is the platform’s query language for investigations and reporting.
+It’s a pipeline language: you start with a table and add stages to filter and shape results.
+
+Open the console at [`/data/query`](/data/query).
+
+## Your first query
+
+```kql
+Findings
+| take 10
+```
+
+## Common patterns
+
+### Filter with `where`
+
+```kql
+Findings
+| where severity == "high"
+| take 25
+```
+
+### Sort and limit
+
+```kql
+Findings
+| sort by publishedAt desc
+| take 50
+```
+
+### Select columns with `project`
+
+```kql
+Findings
+| project id,agent,title,severity,cveId,cvssScore,publishedAt
+| take 25
+```
+
+### Aggregate with `summarize`
+
+```kql
+Findings
+| summarize total=count() by agent
+| sort by total desc
+```
+
+## KQL vs UI search filters
+
+- UI filters are great for fast triage and are intentionally limited.
+- KQL is for:
+  - Exact columns and shapes
+  - Aggregations for reporting
+  - Cross-table pivots (via `join`)
+
+## Next
+
+- KQL syntax reference: [KQL](/learn/reference/kql)
+- Table list and examples: [KQL tables](/learn/reference/kql/tables)
+

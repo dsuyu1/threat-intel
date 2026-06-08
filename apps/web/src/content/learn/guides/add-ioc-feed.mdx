@@ -1,0 +1,54 @@
+---
+title: "Add an IOC feed"
+section: "Guides"
+description: "Configure a TAXII 2.1 connection and verify IOCs are ingesting."
+order: 9
+lastUpdated: "2026-06-07"
+proOnly: true
+---
+
+# Add an IOC feed
+
+IOC ingestion is typically done via TAXII 2.1 feeds (OpenCTI-compatible).
+
+## 1) Open IOC settings
+
+Go to your project’s IOC page and look for TAXII connections (or use the IOC area navigation).
+
+## 2) Add a TAXII connection
+
+You’ll need:
+
+- **Name** (e.g., “OpenCTI”)
+- **API root URL** (e.g., `https://opencti.example.com/taxii2/root`)
+- **Collection ID**
+- **Auth scheme**:
+  - None
+  - Bearer token
+  - Basic auth
+- **Lookback days** (how far back to import on each run)
+
+Save the connection. Credentials are stored encrypted.
+
+## 3) Trigger ingestion
+
+The IOC TAXII agent runs on a schedule, but for onboarding you should trigger it on-demand:
+
+1. Go to [`/agents`](/agents)
+2. Run **IOC TAXII import agent** (and optionally **IOC enrichment agent**)
+
+## 4) Verify IOCs are ingesting
+
+In the IOC list:
+
+- Confirm new IOCs appear
+- Check `lastSeenAt` and tags
+
+For deeper debugging, use KQL:
+
+```kql
+Iocs
+| sort by updatedAt desc
+| take 50
+```
+

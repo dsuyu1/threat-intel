@@ -1,0 +1,49 @@
+---
+title: "Concepts"
+section: "Concepts"
+description: "Mental models for how the platform represents and connects information."
+order: 0
+lastUpdated: "2026-06-07"
+---
+
+# Concepts
+
+The platform is built around a few core ideas: **entities**, **relationships**, and **traceability**.
+
+If you only read one thing in this section, start with the **knowledge graph**.
+
+## The core model
+
+- **Entities** are the “things” you investigate (CVE, actor, technique, IOC, …).  
+  Read: [Entities](/learn/concepts/entities)
+- **Relationships** connect entities with typed edges (“actor uses technique”, “IOC indicates actor”).  
+  Read: [Relationships & evidence](/learn/concepts/relationships-and-evidence)
+- **Evidence** is what makes the graph trustworthy: excerpts + URLs attached to relationships.
+
+## How it shows up in the product
+
+- The **knowledge graph** is the connected view of entities + relationships + evidence.  
+  Read: [Knowledge graph](/learn/concepts/knowledge-graph)
+- **Findings** are agent outputs you triage (CVE/attack/exploit/malware).  
+  Read: [Findings](/learn/concepts/findings)
+- **Sources and documents** explain where data comes from and how it turns into entities/findings.  
+  Read: [Sources & documents](/learn/concepts/sources-and-documents)
+- **Projects** are how data and settings are scoped in the app.  
+  Read: [Projects & scoping](/learn/concepts/projects-and-scoping)
+
+## Pro workflows (and why they exist)
+
+- **Agents**: schedules, on-demand runs, BYOK keys, and debugging primitives.  
+  Read: [Agents](/learn/concepts/agents)
+- **Navigator**: CTEM-style scenario → action → detection pipeline.  
+  Read: [Navigator](/learn/concepts/navigator)
+- **Playbooks**: AI-assisted incident response playbooks and post-incident reviews.  
+  Read: [Playbooks](/learn/concepts/playbooks)
+- **Risk**: a lightweight risk register tied to Navigator scenarios.  
+  Read: [Risk](/learn/concepts/risk)
+- **IOCs**: indicator ingestion, enrichment, and graph linking.  
+  Read: [IOCs](/learn/concepts/iocs)
+- **Compliance**: frameworks, control mappings, and coverage rollups.  
+  Read: [Compliance](/learn/concepts/compliance)
+- **Integrations**: webhooks and external tools (Slack/Teams/Jira/Splunk/TheHive).  
+  Read: [Integrations](/learn/concepts/integrations)

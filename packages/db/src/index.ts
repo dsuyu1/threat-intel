@@ -22,4 +22,6 @@ export function getDb() {
 export * from "./schema";
 export * from "./navigator/engine";
 export * from "./navigator/scoring";
+export * from "./navigator/detections";
 export * from "./kql/index";
+export * from "./ioc/index";

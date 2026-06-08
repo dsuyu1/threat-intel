@@ -1,0 +1,40 @@
+---
+title: "API quickstart"
+section: "Guides"
+description: "Create an API key, make a first request, and understand rate limits."
+order: 8
+lastUpdated: "2026-06-07"
+---
+
+# API quickstart
+
+Use API keys when you want to automate queries, exports, or integrations without a user session.
+
+## 1) Create an API key
+
+1. Open **API Keys** at [`/api-keys`](/api-keys).
+2. Create a new key and select scopes.
+3. Copy the key secret — it’s only shown once.
+
+## 2) Make your first request
+
+Example: run a KQL query via the v1 API.
+
+```bash
+curl -X POST "$BASE_URL/api/v1/query" \
+  -H "Authorization: Bearer $TI_API_KEY" \
+  -H "content-type: application/json" \
+  -d '{"query":"Findings | take 5"}'
+```
+
+## 3) Rate limits
+
+API keys have a per-minute rate limit. If you exceed it, you’ll get:
+
+- HTTP `429`
+- a `retry-after` header (seconds)
+
+## Next
+
+- Full endpoint list and scopes: [API reference](/learn/reference/api)
+

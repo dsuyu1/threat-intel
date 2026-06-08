@@ -1,0 +1,54 @@
+---
+title: "Risk"
+section: "Concepts"
+description: "Risk entries, tolerance profiles, and how Navigator ties into the risk register."
+order: 10
+lastUpdated: "2026-06-07"
+proOnly: true
+---
+
+# Risk
+
+The risk register is a lightweight way to track which scenarios matter, who owns them, and what “acceptable” looks like.
+
+## Risk entries (what they are)
+
+A **risk entry** is typically tied to a Navigator scenario and includes:
+
+- Status (open / accepted / mitigating / closed)
+- Category (operational / financial / compliance / reputational)
+- Owner + notes
+- Optional FAIR-lite estimates (frequency × loss magnitude)
+
+## How risk is calculated
+
+Risk is a combination of:
+
+- Scenario priority (Navigator score)
+- Your current posture (coverage, actions, detections)
+- Your tolerance thresholds (see below)
+
+## Risk tolerance profiles
+
+A tolerance profile sets thresholds per category so “high risk” is consistent:
+
+- Operational threshold
+- Financial threshold
+- Compliance threshold
+- Reputational threshold
+
+These thresholds affect which entries show as “over tolerance” and drive dashboards.
+
+## Compliance mappings (relationship to risk)
+
+Compliance mappings connect controls to scenarios/techniques/mitigations.
+This lets you:
+
+- Show audit evidence (“this control is covered by these detections/actions”)
+- Identify gaps (“these high-risk scenarios have no mapped controls”)
+
+## Relationship to Navigator
+
+Navigator answers “what should we do next?”  
+Risk answers “is this acceptable, and who owns it?”
+

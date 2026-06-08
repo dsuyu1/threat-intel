@@ -17,9 +17,17 @@ export function KpiCard(props: {
   const change = props.changePct;
   const hasChange = typeof change === "number" && Number.isFinite(change);
   const up = hasChange ? change >= 0 : false;
+  const clickable = Boolean(props.href);
 
   const inner = (
-    <Card className="shadow-sm dark:shadow-black/30 bg-white/70 dark:bg-black/30">
+    <Card
+      className={clsx(
+        "shadow-sm dark:shadow-black/30 bg-white/70 dark:bg-black/30",
+        clickable
+          ? "transition-colors group-hover:bg-white/90 dark:group-hover:bg-black/40 group-hover:border-zinc-300 dark:group-hover:border-zinc-700"
+          : null
+      )}
+    >
       <div className="px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -57,10 +65,9 @@ export function KpiCard(props: {
   return (
     <a
       href={props.href}
-      className="block rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-400/60 dark:focus:ring-zinc-500/60"
+      className="group block rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-400/60 dark:focus:ring-zinc-500/60"
     >
       {inner}
     </a>
   );
 }
-

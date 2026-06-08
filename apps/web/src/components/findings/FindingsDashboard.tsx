@@ -14,6 +14,7 @@ export type FindingsSearchParams = {
   type?: string;
   minCvss?: string;
   maxCvss?: string;
+  minEpss?: string;
   days?: string;
   from?: string;
   to?: string;
@@ -67,6 +68,14 @@ function parseCvss(value: string | null) {
   if (!value) return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+function parseEpss(value: string | null) {
+  if (!value) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  if (n < 0 || n > 1) return null;
+  return n;
 }
 
 function hasTag(tags: string[], t: string) {
@@ -195,6 +204,7 @@ function toCsv(rows: FindingCardModel[]) {
     "title",
     "severity",
     "cvssScore",
+    "epssScore",
     "publishedAt",
     "sourceUrl",
     "pocUrl",
@@ -216,6 +226,7 @@ function toCsv(rows: FindingCardModel[]) {
         r.title,
         r.severity ?? "",
         r.cvssScore ?? "",
+        r.epssScore ?? "",
         r.publishedAt ?? "",
         r.sourceUrl ?? "",
         r.pocUrl ?? "",
@@ -258,6 +269,11 @@ export function FindingsDashboard({
   const [minCvss, setMinCvss] = useState<number>(() => initialMinCvss);
   const [maxCvss, setMaxCvss] = useState<number>(() => initialMaxCvss);
 
+  const [minEpss, setMinEpss] = useState<number>(() => {
+    const n = Number(initialSearchParams.minEpss ?? 0);
+    return Number.isFinite(n) ? clamp(n, 0, 100) : 0;
+  });
+
   const [preset, setPreset] = useState<DatePreset>(() => {
     const days = String(initialSearchParams.days ?? "").trim();
     if (days === "1") return "today";
@@ -287,9 +303,11 @@ export function FindingsDashboard({
   const [focusId, setFocusId] = useState<string | null>(null);
   const [toast, setToast] = useState<string>("");
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const cardRefs = useRef(new Map<string, HTMLDivElement | null>());
   const lastHrefRef = useRef<string>("");
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setTriage(loadTriage());
@@ -307,6 +325,32 @@ export function FindingsDashboard({
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+
+    const onPointerDown = (e: PointerEvent) => {
+      const el = moreMenuRef.current;
+      if (!el) return;
+      if (e.target instanceof Node && el.contains(e.target)) return;
+      setMoreOpen(false);
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMoreOpen(false);
+    };
+
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [moreOpen]);
+
+  useEffect(() => {
+    if (!checked.size) setMoreOpen(false);
+  }, [checked.size]);
 
   const triageSets = useMemo(() => {
     const reviewed = new Set((triage?.reviewedIds ?? []).map(String));
@@ -345,6 +389,12 @@ export function FindingsDashboard({
         }
       }
 
+      if (minEpss > 0) {
+        const epss = parseEpss(r.epssScore);
+        if (epss == null) return false;
+        if (epss * 100 < minEpss) return false;
+      }
+
       if (hasPocOnly && !hasPoc(r)) return false;
 
       if (hideDismissed && triageSets.dismissed.has(r.id)) return false;
@@ -381,6 +431,7 @@ export function FindingsDashboard({
     bandFilter,
     minCvss,
     maxCvss,
+    minEpss,
     hasPocOnly,
     hideDismissed,
     triageSets.dismissed,
@@ -409,6 +460,10 @@ export function FindingsDashboard({
           if (score == null || score > maxCvss) continue;
         }
       }
+      if (minEpss > 0) {
+        const epss = parseEpss(r.epssScore);
+        if (epss == null || epss * 100 < minEpss) continue;
+      }
       if (hasPocOnly && !hasPoc(r)) continue;
       if (hideDismissed && triageSets.dismissed.has(r.id)) continue;
       if (dateRange.from) {
@@ -436,7 +491,7 @@ export function FindingsDashboard({
       counts[r.agent] = (counts[r.agent] ?? 0) + 1;
     }
     return counts;
-  }, [rows, bandFilter, minCvss, maxCvss, hasPocOnly, hideDismissed, triageSets.dismissed, dateRange, normalizedQuery]);
+  }, [rows, bandFilter, minCvss, maxCvss, minEpss, hasPocOnly, hideDismissed, triageSets.dismissed, dateRange, normalizedQuery]);
 
   const sorted = useMemo(() => {
     const buckets = new Map<CvssBand, FindingCardModel[]>();
@@ -495,19 +550,21 @@ export function FindingsDashboard({
     // If the user is already filtering by CVSS or PoC-only, don't add extra noise.
     if (hasPocOnly) return [];
     if (bandFilter) return [];
+    if (minEpss > 0) return [];
     if (minCvss > 0 || maxCvss < 10) return [];
 
     const pocs = filtered.filter(hasPoc);
     pocs.sort((a, b) => new Date(whenIso(b)).getTime() - new Date(whenIso(a)).getTime());
     return pocs.slice(0, 6);
-  }, [filtered, hasPocOnly, bandFilter, minCvss, maxCvss]);
+  }, [filtered, hasPocOnly, bandFilter, minEpss, minCvss, maxCvss]);
 
   const activePocsTotal = useMemo(() => {
     if (hasPocOnly) return 0;
     if (bandFilter) return 0;
+    if (minEpss > 0) return 0;
     if (minCvss > 0 || maxCvss < 10) return 0;
     return filtered.filter(hasPoc).length;
-  }, [filtered, hasPocOnly, bandFilter, minCvss, maxCvss]);
+  }, [filtered, hasPocOnly, bandFilter, minEpss, minCvss, maxCvss]);
 
   const visibleIds = useMemo(() => paged.map((r) => r.id), [paged]);
 
@@ -536,6 +593,7 @@ export function FindingsDashboard({
     if (bandFilter) p.band = bandFilter;
     if (minCvss > 0) p.minCvss = String(minCvss);
     if (maxCvss < 10) p.maxCvss = String(maxCvss);
+    if (minEpss > 0) p.minEpss = String(minEpss);
     if (hasPocOnly) p.hasPoc = "1";
     if (hideDismissed) p.hideDismissed = "1";
     p.sort = sortKey;
@@ -554,6 +612,7 @@ export function FindingsDashboard({
     bandFilter,
     minCvss,
     maxCvss,
+    minEpss,
     hasPocOnly,
     hideDismissed,
     sortKey,
@@ -703,6 +762,24 @@ export function FindingsDashboard({
     }
   };
 
+  const sendToTeams = async () => {
+    if (!selectedRows.length) return;
+    if (!confirm(`Send ${selectedRows.length} finding(s) to Microsoft Teams webhooks?`)) return;
+    try {
+      const res = await fetch("/api/integrations/microsoft-teams/send", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ findingIds: selectedRows.map((r) => r.id) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? `Request failed (${res.status})`);
+      setToast(`Sent to Teams: ${data.sent ?? 0}`);
+      clearSelection();
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : "Failed to send to Teams");
+    }
+  };
+
   const sendToDiscord = async () => {
     if (!selectedRows.length) return;
     if (!confirm(`Send ${selectedRows.length} finding(s) to Discord webhooks?`)) return;
@@ -793,6 +870,7 @@ export function FindingsDashboard({
     if (bandFilter) out.push({ label: `Band: ${BAND_META[bandFilter].label}`, onRemove: () => setBandFilter(null) });
     if (minCvss > 0) out.push({ label: `Min CVSS: ${minCvss.toFixed(1)}`, onRemove: () => setMinCvss(0) });
     if (maxCvss < 10) out.push({ label: `Max CVSS: ${maxCvss.toFixed(1)}`, onRemove: () => setMaxCvss(10) });
+    if (minEpss > 0) out.push({ label: `Min EPSS: ${minEpss.toFixed(0)}%`, onRemove: () => setMinEpss(0) });
     if (preset !== "7d") {
       if (preset === "today") out.push({ label: "Date: Today", onRemove: () => setPreset("7d") });
       else if (preset === "30d") out.push({ label: "Date: Last 30d", onRemove: () => setPreset("7d") });
@@ -801,7 +879,7 @@ export function FindingsDashboard({
     if (hasPocOnly) out.push({ label: "Has PoC", onRemove: () => setHasPocOnly(false) });
     if (hideDismissed) out.push({ label: "Hide dismissed", onRemove: () => setHideDismissed(false) });
     return out;
-  }, [query, type, bandFilter, minCvss, maxCvss, preset, from, to, hasPocOnly, hideDismissed]);
+  }, [query, type, bandFilter, minCvss, maxCvss, minEpss, preset, from, to, hasPocOnly, hideDismissed]);
 
   const resetAll = () => {
     setQuery("");
@@ -809,6 +887,7 @@ export function FindingsDashboard({
     setBandFilter(null);
     setMinCvss(0);
     setMaxCvss(10);
+    setMinEpss(0);
     setPreset("7d");
     setFrom("");
     setTo("");
@@ -1043,6 +1122,53 @@ export function FindingsDashboard({
             </div>
 
             <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-medium text-zinc-400">Min EPSS</div>
+                <div className="text-xs tabular-nums text-zinc-400">{minEpss.toFixed(0)}%</div>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={minEpss}
+                onChange={(e) => {
+                  const next = clamp(Number(e.target.value), 0, 100);
+                  setMinEpss(next);
+                  setPage(1);
+                }}
+                className="w-full"
+              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={minEpss}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    const next = Number.isFinite(n) ? clamp(n, 0, 100) : 0;
+                    setMinEpss(next);
+                    setPage(1);
+                  }}
+                  className="w-[92px] rounded-lg bg-zinc-950 border border-zinc-800 px-2 py-1 text-xs text-zinc-200"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMinEpss(0);
+                    setPage(1);
+                  }}
+                  className="text-xs text-zinc-500 hover:text-zinc-300"
+                >
+                  Reset
+                </button>
+              </div>
+              <div className="text-[11px] text-zinc-500">Filters out findings without EPSS enrichment.</div>
+            </div>
+
+            <div className="space-y-2">
               <div className="text-xs font-medium text-zinc-400">Date range</div>
               <select
                 value={preset}
@@ -1198,14 +1324,26 @@ export function FindingsDashboard({
                 </Link>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
                 {activePocs.map((finding) => (
-                  <Link key={finding.id} href={`/findings/${finding.id}`} className="block">
+                  <div
+                    key={finding.id}
+                    role="link"
+                    tabIndex={0}
+                    className="block cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-lg"
+                    onClick={() => router.push(`/findings/${finding.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        router.push(`/findings/${finding.id}`);
+                      }
+                    }}
+                  >
                     <FindingCard
                       finding={finding}
                       className={["pl-6", "border-l-4", "border-l-orange-500"].join(" ")}
                     />
-                  </Link>
+                  </div>
                 ))}
               </div>
             </section>
@@ -1244,7 +1382,7 @@ export function FindingsDashboard({
                   </Link>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
                   {items.map((finding) => {
                     const selected = checked.has(finding.id);
                     const dismissed = triageSets.dismissed.has(finding.id);
@@ -1326,96 +1464,177 @@ export function FindingsDashboard({
               <div className="text-sm text-zinc-200">
                 <span className="tabular-nums font-medium">{checked.size}</span> selected
               </div>
-              <div className="flex items-center gap-2 flex-wrap sm:ml-auto">
-                <button
-                  type="button"
-                  onClick={selectAllVisible}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900"
-                >
-                  Select page
-                </button>
-                <button
-                  type="button"
-                  onClick={selectAllFiltered}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900"
-                >
-                  Select all
-                </button>
-                <button
-                  type="button"
-                  onClick={markReviewed}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900"
-                >
-                  Mark reviewed
-                </button>
-                <button
-                  type="button"
-                  onClick={unreview}
-                  disabled={selectedMeta.reviewed === 0}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
-                >
-                  Unreview
-                </button>
-                <button
-                  type="button"
-                  onClick={sendToJira}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900"
-                >
-                  Create Jira ticket
-                </button>
-                <button
-                  type="button"
-                  onClick={sendToSlack}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900"
-                >
-                  Send to Slack
-                </button>
-                <button
-                  type="button"
-                  onClick={sendToDiscord}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900"
-                >
-                  Send to Discord
-                </button>
-                <button
-                  type="button"
-                  onClick={sendToSoar}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900"
-                >
-                  Send to SOAR
-                </button>
-                <button
-                  type="button"
-                  onClick={exportJson}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900"
-                >
-                  Export JSON
-                </button>
-                <button
-                  type="button"
-                  onClick={exportCsv}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900"
-                >
-                  Export CSV
-                </button>
-                <button
-                  type="button"
-                  onClick={dismiss}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-rose-300 hover:bg-rose-950/30"
-                >
-                  Dismiss
-                </button>
-                <button
-                  type="button"
-                  onClick={undismiss}
-                  disabled={selectedMeta.dismissed === 0}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
-                >
-                  Restore
-                </button>
-                <button type="button" onClick={clearSelection} className="text-xs text-zinc-500 hover:text-zinc-300 px-2 py-1">
-                  Clear
-                </button>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:ml-auto">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={selectAllVisible}
+                    className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900"
+                  >
+                    Select page
+                  </button>
+                  <button
+                    type="button"
+                    onClick={selectAllFiltered}
+                    className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900"
+                  >
+                    Select all
+                  </button>
+                </div>
+
+                <div className="hidden sm:block h-5 w-px bg-zinc-800/80 mx-1" aria-hidden="true" />
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={markReviewed}
+                    className="rounded-lg bg-zinc-100 text-zinc-900 px-3 py-1.5 text-xs font-medium hover:bg-white"
+                  >
+                    Mark reviewed
+                  </button>
+                  <button
+                    type="button"
+                    onClick={dismiss}
+                    className="rounded-lg bg-rose-600/90 text-white px-3 py-1.5 text-xs font-medium hover:bg-rose-600"
+                  >
+                    Dismiss
+                  </button>
+                  <button
+                    type="button"
+                    onClick={sendToJira}
+                    className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900"
+                  >
+                    Create Jira ticket
+                  </button>
+                  <button
+                    type="button"
+                    onClick={sendToSlack}
+                    className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900"
+                  >
+                    Send to Slack
+                  </button>
+
+                  <div className="relative" ref={moreMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setMoreOpen((v) => !v)}
+                      className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900"
+                      aria-haspopup="menu"
+                      aria-expanded={moreOpen}
+                    >
+                      More…
+                    </button>
+
+                    {moreOpen ? (
+                      <div
+                        role="menu"
+                        className="absolute right-0 mt-2 z-50 w-56 rounded-xl border border-zinc-800 bg-zinc-950 shadow-xl p-1"
+                      >
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setMoreOpen(false);
+                            unreview();
+                          }}
+                          disabled={selectedMeta.reviewed === 0}
+                          className="w-full text-left rounded-lg px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900 disabled:opacity-50"
+                        >
+                          Unreview
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setMoreOpen(false);
+                            undismiss();
+                          }}
+                          disabled={selectedMeta.dismissed === 0}
+                          className="w-full text-left rounded-lg px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900 disabled:opacity-50"
+                        >
+                          Restore
+                        </button>
+
+                        <div className="my-1 h-px bg-zinc-800/80" role="separator" />
+
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setMoreOpen(false);
+                            void sendToTeams();
+                          }}
+                          disabled={!selectedRows.length}
+                          className="w-full text-left rounded-lg px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900 disabled:opacity-50"
+                        >
+                          Send to Teams
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setMoreOpen(false);
+                            void sendToDiscord();
+                          }}
+                          disabled={!selectedRows.length}
+                          className="w-full text-left rounded-lg px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900 disabled:opacity-50"
+                        >
+                          Send to Discord
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setMoreOpen(false);
+                            void sendToSoar();
+                          }}
+                          disabled={!selectedRows.length}
+                          className="w-full text-left rounded-lg px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900 disabled:opacity-50"
+                        >
+                          Send to SOAR
+                        </button>
+
+                        <div className="my-1 h-px bg-zinc-800/80" role="separator" />
+
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setMoreOpen(false);
+                            exportJson();
+                          }}
+                          disabled={!selectedRows.length}
+                          className="w-full text-left rounded-lg px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900 disabled:opacity-50"
+                        >
+                          Export JSON
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setMoreOpen(false);
+                            exportCsv();
+                          }}
+                          disabled={!selectedRows.length}
+                          className="w-full text-left rounded-lg px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900 disabled:opacity-50"
+                        >
+                          Export CSV
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMoreOpen(false);
+                      clearSelection();
+                    }}
+                    className="text-xs text-zinc-500 hover:text-zinc-300 px-2 py-1"
+                  >
+                    Clear
+                  </button>
+                </div>
               </div>
             </div>
           </div>

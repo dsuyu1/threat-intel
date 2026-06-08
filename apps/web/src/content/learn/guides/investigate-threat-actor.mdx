@@ -1,0 +1,49 @@
+---
+title: "Investigate a threat actor"
+section: "Guides"
+description: "Find an actor, understand their TTPs, and pivot into related risk and findings."
+order: 2
+lastUpdated: "2026-06-07"
+---
+
+# Investigate a threat actor
+
+This guide shows a typical “actor → techniques → related CVEs/findings” workflow.
+
+## 1) Find an actor
+
+Open the actor explorer at [`/actors`](/actors) and search for an actor name.
+
+## 2) Read the actor profile
+
+On the actor page, look for:
+
+- Summary / description
+- Origin (when available)
+- Commonly used techniques (TTPs)
+- Targeted sectors
+- Linked CVEs (when explicitly cited)
+
+## 3) Explore the graph
+
+Use the relationship graph to answer:
+
+- “What techniques does this actor use?”
+- “What sectors do they target?”
+- “What evidence supports this relationship?”
+
+Evidence (excerpts + URLs) is what makes the graph actionable.
+
+## 4) Pivot to related work
+
+Common pivots:
+
+- Search findings by `CVE-…` to see active exploitation signals
+- In Navigator (Pro), open scenarios for the actor and generate detections
+- In Risk (Pro), create/assign a risk entry for the top scenarios
+
+## Next
+
+- Pro workflow: [Navigator concepts](/learn/concepts/navigator)
+- Pro workflow: [Risk concepts](/learn/concepts/risk)
+

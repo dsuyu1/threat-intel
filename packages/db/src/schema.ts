@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   uuid,
@@ -67,12 +68,25 @@ export const navigatorScenarioTypeEnum = pgEnum("navigator_scenario_type", [
   "cve",
   "technique",
   "inferred",
+  "ioc",
 ]);
 
 export const navigatorActionStatusEnum = pgEnum("navigator_action_status", [
   "todo",
   "in_progress",
   "done",
+]);
+
+export const navigatorActionSlaTierEnum = pgEnum("navigator_action_sla_tier", [
+  "critical",
+  "high",
+  "medium",
+  "low",
+]);
+
+export const navigatorActionSlaEventKindEnum = pgEnum("navigator_action_sla_event_kind", [
+  "breached",
+  "resolved",
 ]);
 
 export const navigatorScenarioValidationStatusEnum = pgEnum(
@@ -85,6 +99,23 @@ export const navigatorDetectionFormatEnum = pgEnum("navigator_detection_format",
   "kql",
   "spl",
 ]);
+
+export const navigatorDetectionLifecycleStatusEnum = pgEnum("navigator_detection_lifecycle_status", [
+  "draft",
+  "peer_reviewed",
+  "deployed",
+  "monitoring",
+  "retired",
+]);
+
+export const navigatorDetectionJobStatusEnum = pgEnum("navigator_detection_job_status", [
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+]);
+
+export const vulnScannerKindEnum = pgEnum("vuln_scanner_kind", ["tenable", "qualys", "rapid7", "openvas"]);
 
 export const riskStatusEnum = pgEnum("risk_status", [
   "open",
@@ -110,6 +141,11 @@ export const complianceSourceKindEnum = pgEnum("compliance_source_kind", [
   "mitigation",
   "technique",
   "scenario",
+]);
+
+export const complianceFrameworkOriginEnum = pgEnum("compliance_framework_source", [
+  "auto",
+  "manual",
 ]);
 
 export const sourceTypeEnum = pgEnum("source_type", ["rss", "stix"]);
@@ -150,6 +186,55 @@ export const playbookSourceKindEnum = pgEnum("playbook_source_kind", [
 
 export const playbookContentFormatEnum = pgEnum("playbook_content_format", ["json", "yaml"]);
 
+export const playbookReviewStepStatusEnum = pgEnum("playbook_review_step_status", ["done", "skipped"]);
+
+export const playbookReviewToolActionStatusEnum = pgEnum("playbook_review_tool_action_status", [
+  "succeeded",
+  "failed",
+  "not_used",
+]);
+
+export const tabletopExerciseStatusEnum = pgEnum("tabletop_exercise_status", [
+  "draft",
+  "scheduled",
+  "in_progress",
+  "completed",
+]);
+
+export const tabletopScenarioTypeEnum = pgEnum("tabletop_scenario_type", [
+  "ransomware",
+  "supply_chain",
+  "insider",
+  "apt",
+  "nation_state",
+  "bcs",
+]);
+
+export const tabletopDifficultyLevelEnum = pgEnum("tabletop_difficulty_level", [
+  "beginner",
+  "intermediate",
+  "advanced",
+]);
+
+export const tabletopSessionStatusEnum = pgEnum("tabletop_session_status", [
+  "scheduled",
+  "in_progress",
+  "completed",
+]);
+
+export const tabletopFindingSeverityEnum = pgEnum("tabletop_finding_severity", [
+  "low",
+  "medium",
+  "high",
+  "critical",
+]);
+
+export const tabletopFindingStatusEnum = pgEnum("tabletop_finding_status", [
+  "open",
+  "in_progress",
+  "resolved",
+]);
+
 // ─── Findings ─────────────────────────────────────────────────────────────────
 
 export const findings = pgTable(
@@ -169,6 +254,10 @@ export const findings = pgTable(
     severity: severityEnum("severity"),
     cvssScore: numeric("cvss_score", { precision: 4, scale: 1 }),
     cvssVector: text("cvss_vector"),
+    // EPSS (FIRST) probability-of-exploitation enrichment (0-1)
+    epssScore: numeric("epss_score", { precision: 8, scale: 6 }),
+    epssPercentile: numeric("epss_percentile", { precision: 8, scale: 6 }),
+    epssUpdatedAt: timestamp("epss_updated_at", { withTimezone: true }),
 
     // CVE info (vuln + exploit agents)
     cveId: text("cve_id"),
@@ -318,6 +407,301 @@ export const userStack = pgTable(
   })
 );
 
+export const projectFindingStackMatches = pgTable(
+  "project_finding_stack_matches",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    findingId: uuid("finding_id")
+      .notNull()
+      .references(() => findings.id, { onDelete: "cascade" }),
+    technology: text("technology").notNull(),
+    versionRange: text("version_range"),
+    matchedOn: text("matched_on"), // e.g. "kev.vendorProject" | "kev.product" | "finding.text"
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqueMatchIdx: uniqueIndex("project_finding_stack_matches_unique_idx").on(
+      t.projectId,
+      t.findingId,
+      t.technology
+    ),
+    projectIdx: index("project_finding_stack_matches_project_id_idx").on(t.projectId),
+    findingIdx: index("project_finding_stack_matches_finding_id_idx").on(t.findingId),
+  })
+);
+
+export const watchlistKindEnum = pgEnum("watchlist_kind", [
+  "actor",
+  "cve",
+  "technique",
+]);
+
+export const watchlistChannelEnum = pgEnum("watchlist_channel", [
+  "slack",
+  "discord",
+  "soar",
+  "email",
+]);
+
+export const watchlistItems = pgTable(
+  "watchlist_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    enabled: boolean("enabled").notNull().default(true),
+    kind: watchlistKindEnum("kind").notNull(),
+    value: text("value").notNull(),
+    channel: watchlistChannelEnum("channel").notNull(),
+    // For slack/discord/soar, stores the corresponding connection UUID. NULL for email.
+    connectionId: uuid("connection_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    projectIdx: index("watchlist_items_project_id_idx").on(t.projectId),
+    userIdx: index("watchlist_items_user_id_idx").on(t.userId),
+    enabledIdx: index("watchlist_items_enabled_idx").on(t.enabled),
+    kindIdx: index("watchlist_items_kind_idx").on(t.kind),
+    valueIdx: index("watchlist_items_value_idx").on(t.value),
+    uniqueItemIdx: uniqueIndex("watchlist_items_unique_idx").on(t.projectId, t.userId, t.kind, t.value, t.channel, t.connectionId),
+  })
+);
+
+export const watchlistDeliveries = pgTable(
+  "watchlist_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    watchlistItemId: uuid("watchlist_item_id")
+      .notNull()
+      .references(() => watchlistItems.id, { onDelete: "cascade" }),
+    findingId: uuid("finding_id")
+      .notNull()
+      .references(() => findings.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("sent"), // "sent" | "failed" | "error"
+    httpStatus: integer("http_status"),
+    error: text("error"),
+    responseBody: text("response_body"),
+    sentAt: timestamp("sent_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqueDeliveryIdx: uniqueIndex("watchlist_deliveries_unique_idx").on(t.watchlistItemId, t.findingId),
+    itemIdx: index("watchlist_deliveries_watchlist_item_id_idx").on(t.watchlistItemId),
+    findingIdx: index("watchlist_deliveries_finding_id_idx").on(t.findingId),
+    sentAtIdx: index("watchlist_deliveries_sent_at_idx").on(t.sentAt),
+  })
+);
+
+// ─── IOCs (Indicators of Compromise) ──────────────────────────────────────────
+
+export const iocKindEnum = pgEnum("ioc_kind", ["ipv4", "ipv6", "domain", "url", "md5", "sha1", "sha256"]);
+
+export const iocSourceKindEnum = pgEnum("ioc_source_kind", ["manual", "taxii"]);
+
+export const iocTaxiiAuthSchemeEnum = pgEnum("ioc_taxii_auth_scheme", ["none", "bearer", "basic"]);
+
+export const iocEnrichmentProviderEnum = pgEnum("ioc_enrichment_provider", ["virustotal", "shodan"]);
+
+export const iocEnrichmentJobStatusEnum = pgEnum("ioc_enrichment_job_status", ["queued", "running", "succeeded", "failed"]);
+
+export const iocs = pgTable(
+  "iocs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    kind: iocKindEnum("kind").notNull(),
+    value: text("value").notNull(),
+    normalized: text("normalized").notNull(),
+    tags: jsonb("tags").notNull().default([]),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqueProjectKindNormIdx: uniqueIndex("iocs_project_kind_norm_idx").on(t.projectId, t.kind, t.normalized),
+    projectKindIdx: index("iocs_project_kind_idx").on(t.projectId, t.kind),
+    projectLastSeenIdx: index("iocs_project_last_seen_idx").on(t.projectId, t.lastSeenAt),
+  })
+);
+
+export const iocTaxiiConnections = pgTable(
+  "ioc_taxii_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    apiRootUrl: text("api_root_url").notNull(),
+    collectionId: text("collection_id").notNull(),
+    authScheme: iocTaxiiAuthSchemeEnum("auth_scheme").notNull().default("none"),
+    apiKeyEnc: text("api_key_enc"),
+    username: text("username"),
+    passwordEnc: text("password_enc"),
+    lookbackDays: integer("lookback_days").notNull().default(30),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    nextCursor: text("next_cursor"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    projectIdx: index("ioc_taxii_connections_project_id_idx").on(t.projectId),
+    enabledIdx: index("ioc_taxii_connections_enabled_idx").on(t.enabled),
+    uniqueProjectNameIdx: uniqueIndex("ioc_taxii_connections_project_name_idx").on(t.projectId, t.name),
+  })
+);
+
+export const iocSources = pgTable(
+  "ioc_sources",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    iocId: uuid("ioc_id")
+      .notNull()
+      .references(() => iocs.id, { onDelete: "cascade" }),
+    sourceKind: iocSourceKindEnum("source_kind").notNull(),
+    connectionId: uuid("connection_id").references(() => iocTaxiiConnections.id, { onDelete: "set null" }),
+    externalId: text("external_id").notNull(),
+    externalUrl: text("external_url"),
+    confidence: doublePrecision("confidence"),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    rawJson: jsonb("raw_json"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqueSourceIdx: uniqueIndex("ioc_sources_unique_idx").on(t.sourceKind, t.connectionId, t.externalId, t.iocId),
+    iocIdx: index("ioc_sources_ioc_id_idx").on(t.iocId),
+    projectIdx: index("ioc_sources_project_id_idx").on(t.projectId),
+  })
+);
+
+export const iocEnrichmentKeys = pgTable(
+  "ioc_enrichment_keys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: iocEnrichmentProviderEnum("provider").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    apiKeyEnc: text("api_key_enc").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqueProjectProviderIdx: uniqueIndex("ioc_enrichment_keys_project_provider_idx").on(t.projectId, t.provider),
+    projectIdx: index("ioc_enrichment_keys_project_id_idx").on(t.projectId),
+  })
+);
+
+export const iocEnrichments = pgTable(
+  "ioc_enrichments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    iocId: uuid("ioc_id")
+      .notNull()
+      .references(() => iocs.id, { onDelete: "cascade" }),
+    provider: iocEnrichmentProviderEnum("provider").notNull(),
+    fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    rawJson: jsonb("raw_json"),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqueIocProviderIdx: uniqueIndex("ioc_enrichments_ioc_provider_idx").on(t.iocId, t.provider),
+    projectProviderFetchedIdx: index("ioc_enrichments_project_provider_fetched_idx").on(t.projectId, t.provider, t.fetchedAt),
+  })
+);
+
+export const iocEnrichmentJobs = pgTable(
+  "ioc_enrichment_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    iocId: uuid("ioc_id")
+      .notNull()
+      .references(() => iocs.id, { onDelete: "cascade" }),
+    provider: iocEnrichmentProviderEnum("provider").notNull(),
+    status: iocEnrichmentJobStatusEnum("status").notNull().default("queued"),
+    requestedByUserId: uuid("requested_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    projectIdx: index("ioc_enrichment_jobs_project_id_idx").on(t.projectId),
+    statusCreatedIdx: index("ioc_enrichment_jobs_status_created_idx").on(t.status, t.createdAt),
+    activeUniqueIdx: uniqueIndex("ioc_enrichment_jobs_active_unique_idx")
+      .on(t.projectId, t.iocId, t.provider)
+      .where(sql`${t.status} in ('queued','running')`),
+  })
+);
+
 // ─── Alerts ───────────────────────────────────────────────────────────────────
 
 export const alerts = pgTable(
@@ -415,6 +799,8 @@ export const jiraAutomationDeliveries = pgTable(
 export type WebhookDeliveryCriteria = JiraAutomationCriteria;
 export type SoarWebhookHeaders = Record<string, string>;
 
+export const emailDigestFrequencyEnum = pgEnum("email_digest_frequency", ["daily", "weekly"]);
+
 export const slackWebhookConnections = pgTable(
   "slack_webhook_connections",
   {
@@ -482,6 +868,38 @@ export const discordWebhookConnections = pgTable(
       t.projectId,
       t.name
     ),
+  })
+);
+
+export const msTeamsWebhookConnections = pgTable(
+  "ms_teams_webhook_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    webhookUrl: text("webhook_url").notNull(),
+    criteria: jsonb("criteria")
+      .$type<WebhookDeliveryCriteria>()
+      .notNull()
+      .default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userIdx: index("ms_teams_webhook_connections_user_id_idx").on(t.userId),
+    projectIdx: index("ms_teams_webhook_connections_project_id_idx").on(t.projectId),
+    enabledIdx: index("ms_teams_webhook_connections_enabled_idx").on(t.enabled),
+    userNameIdx: uniqueIndex("ms_teams_webhook_connections_user_name_idx").on(t.projectId, t.name),
   })
 );
 
@@ -557,6 +975,198 @@ export const splunkConnections = pgTable(
   })
 );
 
+export const thehiveConnections = pgTable(
+  "thehive_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    baseUrl: text("base_url").notNull(),
+    authScheme: text("auth_scheme").notNull().default("bearer"),
+    apiKeyEnc: text("api_key_enc").notNull(),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userIdx: index("thehive_connections_user_id_idx").on(t.userId),
+    projectIdx: index("thehive_connections_project_id_idx").on(t.projectId),
+    enabledIdx: index("thehive_connections_enabled_idx").on(t.enabled),
+    projectNameIdx: uniqueIndex("thehive_connections_project_name_idx").on(t.projectId, t.name),
+  })
+);
+
+export const emailDigestConnections = pgTable(
+  "email_digest_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    recipients: jsonb("recipients").$type<string[]>().notNull().default([]),
+    frequency: emailDigestFrequencyEnum("frequency").notNull().default("daily"),
+    sendHour: integer("send_hour").notNull().default(8),
+    timezone: text("timezone").notNull().default("UTC"),
+    criteria: jsonb("criteria")
+      .$type<WebhookDeliveryCriteria>()
+      .notNull()
+      .default({}),
+    lastSentAt: timestamp("last_sent_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userIdx: index("email_digest_connections_user_id_idx").on(t.userId),
+    projectIdx: index("email_digest_connections_project_id_idx").on(t.projectId),
+    enabledIdx: index("email_digest_connections_enabled_idx").on(t.enabled),
+    userNameIdx: uniqueIndex("email_digest_connections_user_name_idx").on(t.projectId, t.name),
+  })
+);
+
+export const vulnScannerConnections = pgTable(
+  "vuln_scanner_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: vulnScannerKindEnum("kind").notNull(),
+    name: text("name").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    baseUrl: text("base_url").notNull(),
+    credentialsEnc: text("credentials_enc").notNull(),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userIdx: index("vuln_scanner_connections_user_id_idx").on(t.userId),
+    projectIdx: index("vuln_scanner_connections_project_id_idx").on(t.projectId),
+    enabledIdx: index("vuln_scanner_connections_enabled_idx").on(t.enabled),
+    kindIdx: index("vuln_scanner_connections_kind_idx").on(t.kind),
+    projectNameIdx: uniqueIndex("vuln_scanner_connections_project_name_idx").on(t.projectId, t.name),
+  })
+);
+
+export const vulnScannerAssets = pgTable(
+  "vuln_scanner_assets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    connectionId: uuid("connection_id")
+      .notNull()
+      .references(() => vulnScannerConnections.id, { onDelete: "cascade" }),
+    externalId: text("external_id"),
+    assetKey: text("asset_key").notNull(),
+    hostname: text("hostname"),
+    ipv4: text("ipv4"),
+    os: text("os"),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    rawJson: jsonb("raw_json"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    projectIdx: index("vuln_scanner_assets_project_id_idx").on(t.projectId),
+    connectionIdx: index("vuln_scanner_assets_connection_id_idx").on(t.connectionId),
+    lastSeenIdx: index("vuln_scanner_assets_last_seen_at_idx").on(t.lastSeenAt),
+    uniqueAssetIdx: uniqueIndex("vuln_scanner_assets_unique_idx").on(t.connectionId, t.assetKey),
+  })
+);
+
+export const vulnScannerAssetCves = pgTable(
+  "vuln_scanner_asset_cves",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    connectionId: uuid("connection_id")
+      .notNull()
+      .references(() => vulnScannerConnections.id, { onDelete: "cascade" }),
+    assetId: uuid("asset_id")
+      .notNull()
+      .references(() => vulnScannerAssets.id, { onDelete: "cascade" }),
+    cveId: text("cve_id").notNull(),
+    scannerVulnId: text("scanner_vuln_id"),
+    severity: text("severity"),
+    status: text("status"),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    rawJson: jsonb("raw_json"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    projectIdx: index("vuln_scanner_asset_cves_project_id_idx").on(t.projectId),
+    connectionIdx: index("vuln_scanner_asset_cves_connection_id_idx").on(t.connectionId),
+    cveIdx: index("vuln_scanner_asset_cves_cve_id_idx").on(t.cveId),
+    lastSeenIdx: index("vuln_scanner_asset_cves_last_seen_at_idx").on(t.lastSeenAt),
+    uniqueAssetCveIdx: uniqueIndex("vuln_scanner_asset_cves_unique_idx").on(t.assetId, t.cveId),
+  })
+);
+
+export const vulnScannerCveExposures = pgTable(
+  "vuln_scanner_cve_exposures",
+  {
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    connectionId: uuid("connection_id")
+      .notNull()
+      .references(() => vulnScannerConnections.id, { onDelete: "cascade" }),
+    cveId: text("cve_id").notNull(),
+    affectedHostCount: integer("affected_host_count").notNull().default(0),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    sampleHostsJson: jsonb("sample_hosts_json").$type<unknown[]>().notNull().default([]),
+    computedAt: timestamp("computed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.projectId, t.connectionId, t.cveId] }),
+    projectIdx: index("vuln_scanner_cve_exposures_project_id_idx").on(t.projectId),
+    connectionIdx: index("vuln_scanner_cve_exposures_connection_id_idx").on(t.connectionId),
+    cveIdx: index("vuln_scanner_cve_exposures_cve_id_idx").on(t.cveId),
+  })
+);
+
 export const sources = pgTable(
   "sources",
   {
@@ -583,6 +1193,32 @@ export const sources = pgTable(
   })
 );
 
+export const sourceReliabilitySnapshots = pgTable(
+  "source_reliability_snapshots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => sources.id, { onDelete: "cascade" }),
+    computedAt: timestamp("computed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    windowDays: integer("window_days").notNull(),
+    totalClaims: integer("total_claims").notNull(),
+    confirmedClaims: integer("confirmed_claims").notNull(),
+    confirmationRate: doublePrecision("confirmation_rate").notNull(),
+    avgDelayHours: doublePrecision("avg_delay_hours"),
+    timelinessScore: doublePrecision("timeliness_score").notNull(),
+    maturedClaims: integer("matured_claims").notNull(),
+    falsePositiveRate: doublePrecision("false_positive_rate").notNull(),
+    reliability: doublePrecision("reliability").notNull(),
+  },
+  (t) => ({
+    sourceIdx: index("source_reliability_snapshots_source_id_idx").on(t.sourceId),
+    computedAtIdx: index("source_reliability_snapshots_computed_at_idx").on(t.computedAt),
+  })
+);
+
 // â”€â”€â”€ Documents + embeddings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const documents = pgTable(
@@ -598,6 +1234,7 @@ export const documents = pgTable(
     contentHash: text("content_hash").notNull(),
     cleanText: text("clean_text"),
     status: docStatusEnum("status").notNull().default("ok"),
+    sourceId: uuid("source_id").references(() => sources.id, { onDelete: "set null" }),
     error: text("error"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -607,6 +1244,7 @@ export const documents = pgTable(
     urlIdx: uniqueIndex("documents_url_idx").on(t.url),
     hashIdx: index("documents_hash_idx").on(t.contentHash),
     publishedIdx: index("documents_published_at_idx").on(t.publishedAt),
+    sourceIdx: index("documents_source_id_idx").on(t.sourceId),
   })
 );
 
@@ -828,6 +1466,94 @@ export const userAiKeys = pgTable(
   })
 );
 
+// ─── Enterprise features ───────────────────────────────────────────────────────
+
+// API keys for the external REST API (separate from Clerk).
+export const apiKeys = pgTable(
+  "api_keys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    name: text("name").notNull(),
+    keyPrefix: text("key_prefix").notNull(),
+    keyHash: text("key_hash").notNull(),
+    scopes: text("scopes").notNull().default("[]"), // JSON array string
+    rateLimitPerMin: integer("rate_limit_per_min").notNull().default(60),
+
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqHash: uniqueIndex("api_keys_key_hash_idx").on(t.keyHash),
+    projectIdx: index("api_keys_project_id_idx").on(t.projectId),
+    prefixIdx: index("api_keys_key_prefix_idx").on(t.keyPrefix),
+    userIdx: index("api_keys_user_id_idx").on(t.userId),
+  })
+);
+
+export const apiKeyRateLimits = pgTable(
+  "api_key_rate_limits",
+  {
+    apiKeyId: uuid("api_key_id")
+      .notNull()
+      .references(() => apiKeys.id, { onDelete: "cascade" }),
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    count: integer("count").notNull().default(0),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.apiKeyId, t.windowStart] }),
+    windowIdx: index("api_key_rate_limits_window_start_idx").on(t.windowStart),
+  })
+);
+
+// SBOM uploads (CycloneDX or SPDX).
+export const sboms = pgTable(
+  "sboms",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    name: text("name").notNull(),
+    format: text("format").notNull().default("unknown"), // "cyclonedx_json" | "spdx_json" | "unknown"
+    sha256: text("sha256").notNull(),
+    document: jsonb("document").notNull(),
+
+    componentCount: integer("component_count").notNull().default(0),
+    vulnerableComponentCount: integer("vulnerable_component_count").notNull().default(0),
+    matchedCveCount: integer("matched_cve_count").notNull().default(0),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniq: uniqueIndex("sboms_project_sha256_idx").on(t.projectId, t.sha256),
+    projectIdx: index("sboms_project_id_idx").on(t.projectId),
+    userIdx: index("sboms_user_id_idx").on(t.userId),
+  })
+);
+
 export const agentSettings = pgTable(
   "agent_settings",
   {
@@ -883,7 +1609,10 @@ export const agentRuns = pgTable(
     projectId: uuid("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
+    // Nullable only for system-initiated runs (e.g. schedules/automation).
+    // When systemRun=false, userId must be non-null (enforced via migration constraint).
     userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+    systemRun: boolean("system_run").notNull().default(false),
     customAgentId: uuid("custom_agent_id").references(() => customAgents.id, {
       onDelete: "cascade",
     }),
@@ -934,7 +1663,10 @@ export const agentOutputs = pgTable(
     projectId: uuid("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
+    // Nullable only for system outputs that are not attributable to a single user.
+    // When systemRun=false, userId must be non-null (enforced via migration constraint).
     userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+    systemRun: boolean("system_run").notNull().default(false),
     agentKey: text("agent_key").notNull(),
     format: text("format").notNull().default("markdown"),
     content: text("content").notNull(),
@@ -1053,6 +1785,7 @@ export const navigatorActions = pgTable(
       .references(() => navigatorScenarios.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     status: navigatorActionStatusEnum("status").notNull().default("todo"),
+    slaTier: navigatorActionSlaTierEnum("sla_tier").notNull().default("high"),
     dueDate: timestamp("due_date", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -1066,6 +1799,30 @@ export const navigatorActions = pgTable(
     projectIdx: index("navigator_actions_project_id_idx").on(t.projectId),
     scenarioIdx: index("navigator_actions_scenario_id_idx").on(t.scenarioId),
     statusIdx: index("navigator_actions_status_idx").on(t.status),
+  })
+);
+
+export const navigatorActionSlaEvents = pgTable(
+  "navigator_action_sla_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    actionId: uuid("action_id")
+      .notNull()
+      .references(() => navigatorActions.id, { onDelete: "cascade" }),
+    kind: navigatorActionSlaEventKindEnum("kind").notNull(),
+    dueDate: timestamp("due_date", { withTimezone: true }),
+    at: timestamp("at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    projectIdx: index("navigator_action_sla_events_project_id_idx").on(t.projectId),
+    actionIdx: index("navigator_action_sla_events_action_id_idx").on(t.actionId),
+    kindAtIdx: index("navigator_action_sla_events_kind_at_idx").on(t.kind, t.at),
+    uniqueIdx: uniqueIndex("navigator_action_sla_events_unique_idx").on(t.actionId, t.kind, t.dueDate),
   })
 );
 
@@ -1087,6 +1844,13 @@ export const navigatorDetections = pgTable(
     format: navigatorDetectionFormatEnum("format").notNull(),
     content: text("content").notNull(),
     model: text("model"),
+    lifecycleStatus: navigatorDetectionLifecycleStatusEnum("lifecycle_status")
+      .notNull()
+      .default("draft"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewedBy: uuid("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+    deployedAt: timestamp("deployed_at", { withTimezone: true }),
+    retiredAt: timestamp("retired_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -1100,12 +1864,45 @@ export const navigatorDetections = pgTable(
     scenarioIdx: index("navigator_detections_scenario_id_idx").on(t.scenarioId),
     techniqueIdx: index("navigator_detections_technique_id_idx").on(t.techniqueId),
     formatIdx: index("navigator_detections_format_idx").on(t.format),
+    lifecycleIdx: index("navigator_detections_lifecycle_status_idx").on(t.lifecycleStatus),
     uniqueIdx: uniqueIndex("navigator_detections_unique_idx").on(
       t.projectId,
       t.scenarioId,
       t.techniqueId,
       t.format
     ),
+  })
+);
+
+export const navigatorDetectionJobs = pgTable(
+  "navigator_detection_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    scenarioId: uuid("scenario_id")
+      .notNull()
+      .references(() => navigatorScenarios.id, { onDelete: "cascade" }),
+    techniqueId: text("technique_id").notNull(),
+    formats: jsonb("formats").notNull(),
+    status: navigatorDetectionJobStatusEnum("status").notNull().default("queued"),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    projectIdx: index("navigator_detection_jobs_project_id_idx").on(t.projectId),
+    scenarioIdx: index("navigator_detection_jobs_scenario_id_idx").on(t.scenarioId),
+    techniqueIdx: index("navigator_detection_jobs_technique_id_idx").on(t.techniqueId),
+    statusCreatedIdx: index("navigator_detection_jobs_status_created_idx").on(t.status, t.createdAt),
   })
 );
 
@@ -1224,6 +2021,68 @@ export const complianceMappings = pgTable(
   })
 );
 
+export const complianceControls = pgTable(
+  "compliance_controls",
+  {
+    framework: complianceFrameworkEnum("framework").notNull(),
+    controlId: text("control_id").notNull(),
+    title: text("title"),
+    groupId: text("group_id"),
+    groupTitle: text("group_title"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.framework, t.controlId] }),
+    frameworkIdx: index("compliance_controls_framework_idx").on(t.framework),
+    sortIdx: index("compliance_controls_sort_idx").on(t.framework, t.sortOrder),
+  })
+);
+
+export const projectComplianceSettings = pgTable("project_compliance_settings", {
+  projectId: uuid("project_id")
+    .primaryKey()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  federalFunding: boolean("federal_funding").notNull().default(false),
+  cyberInsurance: boolean("cyber_insurance").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const projectComplianceFrameworks = pgTable(
+  "project_compliance_frameworks",
+  {
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    framework: complianceFrameworkEnum("framework").notNull(),
+    source: complianceFrameworkOriginEnum("source").notNull().default("manual"),
+    isRequired: boolean("is_required").notNull().default(false),
+    reasons: jsonb("reasons").$type<string[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.projectId, t.framework] }),
+    projectIdx: index("project_compliance_frameworks_project_id_idx").on(t.projectId),
+    frameworkIdx: index("project_compliance_frameworks_framework_idx").on(t.framework),
+    requiredIdx: index("project_compliance_frameworks_required_idx").on(t.projectId, t.isRequired),
+  })
+);
+
 export const playbooks = pgTable(
   "playbooks",
   {
@@ -1261,6 +2120,327 @@ export const playbooks = pgTable(
   })
 );
 
+export const incidents = pgTable(
+  "incidents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    source: text("source").notNull().default("thehive"),
+    externalId: text("external_id").notNull(),
+    externalNumber: integer("external_number"),
+    title: text("title"),
+    status: text("status"),
+    incidentType: playbookIncidentTypeEnum("incident_type"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    detectedAt: timestamp("detected_at", { withTimezone: true }),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+    containedAt: timestamp("contained_at", { withTimezone: true }),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    externalUpdatedAt: timestamp("external_updated_at", { withTimezone: true }),
+    rawJson: jsonb("raw_json"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    projectIdx: index("incidents_project_id_idx").on(t.projectId),
+    incidentTypeIdx: index("incidents_incident_type_idx").on(t.incidentType),
+    detectedAtIdx: index("incidents_detected_at_idx").on(t.detectedAt),
+    uniqueExternalIdx: uniqueIndex("incidents_unique_external_idx").on(t.projectId, t.source, t.externalId),
+  })
+);
+
+export const playbookIncidentReviews = pgTable(
+  "playbook_incident_reviews",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    playbookId: uuid("playbook_id")
+      .notNull()
+      .references(() => playbooks.id, { onDelete: "cascade" }),
+    incidentId: uuid("incident_id")
+      .notNull()
+      .references(() => incidents.id, { onDelete: "cascade" }),
+    reviewerUserId: uuid("reviewer_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    notes: text("notes"),
+    estimatedTotalMinutes: integer("estimated_total_minutes").notNull(),
+    actualTotalMinutes: integer("actual_total_minutes"),
+    totalSteps: integer("total_steps").notNull(),
+    skippedSteps: integer("skipped_steps").notNull(),
+    totalToolActions: integer("total_tool_actions").notNull(),
+    failedToolActions: integer("failed_tool_actions").notNull(),
+    effectivenessScore: integer("effectiveness_score"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    projectIdx: index("playbook_incident_reviews_project_id_idx").on(t.projectId),
+    incidentIdx: index("playbook_incident_reviews_incident_id_idx").on(t.incidentId),
+    playbookIdx: index("playbook_incident_reviews_playbook_id_idx").on(t.playbookId),
+    uniquePlaybookIncidentIdx: uniqueIndex("playbook_incident_reviews_unique_idx").on(t.playbookId, t.incidentId),
+  })
+);
+
+export const playbookIncidentReviewSteps = pgTable(
+  "playbook_incident_review_steps",
+  {
+    reviewId: uuid("review_id")
+      .notNull()
+      .references(() => playbookIncidentReviews.id, { onDelete: "cascade" }),
+    stepId: text("step_id").notNull(),
+    stepTitle: text("step_title").notNull(),
+    status: playbookReviewStepStatusEnum("status").notNull(),
+    actualMinutes: integer("actual_minutes"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.reviewId, t.stepId] }),
+    statusIdx: index("playbook_incident_review_steps_status_idx").on(t.status),
+  })
+);
+
+export const playbookIncidentReviewToolActions = pgTable(
+  "playbook_incident_review_tool_actions",
+  {
+    reviewId: uuid("review_id")
+      .notNull()
+      .references(() => playbookIncidentReviews.id, { onDelete: "cascade" }),
+    stepId: text("step_id").notNull(),
+    actionIndex: integer("action_index").notNull(),
+    tool: text("tool").notNull(),
+    label: text("label").notNull(),
+    status: playbookReviewToolActionStatusEnum("status").notNull(),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.reviewId, t.stepId, t.actionIndex] }),
+    statusIdx: index("playbook_incident_review_tool_actions_status_idx").on(t.status),
+  })
+);
+
+// ─── Tabletop exercises (generator + runner) ──────────────────────────────────
+
+export type TabletopGenerationInputs = {
+  stack?: Array<{ technology: string; versionRange?: string | null }>;
+  navigatorScenarioIds?: string[];
+  techniqueIds?: string[];
+  cveIds?: string[];
+  sector?: string | null;
+  geo?: string | null;
+};
+
+export const tabletopExercises = pgTable(
+  "tabletop_exercises",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    title: text("title").notNull(),
+    status: tabletopExerciseStatusEnum("status").notNull().default("draft"),
+    scenarioType: tabletopScenarioTypeEnum("scenario_type").notNull(),
+
+    actorId: text("actor_id").notNull(),
+    actorName: text("actor_name").notNull(),
+
+    difficultyLevel: tabletopDifficultyLevelEnum("difficulty_level").notNull(),
+    durationMinutes: integer("duration_minutes").notNull(),
+    complianceTag: text("compliance_tag"),
+
+    narrative: text("narrative").notNull(),
+    facilitatorGuide: text("facilitator_guide").notNull(),
+    generationInputs: jsonb("generation_inputs").$type<TabletopGenerationInputs>().notNull().default({}),
+
+    generatedAt: timestamp("generated_at", { withTimezone: true }),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    projectIdx: index("tabletop_exercises_project_id_idx").on(t.projectId),
+    statusIdx: index("tabletop_exercises_status_idx").on(t.projectId, t.status),
+  })
+);
+
+export const tabletopInjects = pgTable(
+  "tabletop_injects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    exerciseId: uuid("exercise_id")
+      .notNull()
+      .references(() => tabletopExercises.id, { onDelete: "cascade" }),
+    sequence: integer("sequence").notNull(),
+    tPlusMinutes: integer("t_plus_minutes").notNull(),
+    title: text("title").notNull(),
+    situation: text("situation").notNull(),
+    attackTechniqueId: text("attack_technique_id"),
+    discussionQuestions: jsonb("discussion_questions").$type<string[]>().notNull().default([]),
+    evaluationCriteria: jsonb("evaluation_criteria").$type<string[]>().notNull().default([]),
+    curveballs: jsonb("curveballs").$type<string[]>(),
+    facilitatorTips: text("facilitator_tips"),
+  },
+  (t) => ({
+    exerciseIdx: index("tabletop_injects_exercise_id_idx").on(t.exerciseId),
+    seqIdx: uniqueIndex("tabletop_injects_exercise_sequence_idx").on(t.exerciseId, t.sequence),
+  })
+);
+
+export const tabletopRoles = pgTable(
+  "tabletop_roles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    exerciseId: uuid("exercise_id")
+      .notNull()
+      .references(() => tabletopExercises.id, { onDelete: "cascade" }),
+    roleName: text("role_name").notNull(),
+    briefing: text("briefing").notNull(),
+    keyResponsibilities: jsonb("key_responsibilities").$type<string[]>().notNull().default([]),
+    documentsToHave: jsonb("documents_to_have").$type<string[]>().notNull().default([]),
+  },
+  (t) => ({
+    exerciseIdx: index("tabletop_roles_exercise_id_idx").on(t.exerciseId),
+  })
+);
+
+export const tabletopSessions = pgTable(
+  "tabletop_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    exerciseId: uuid("exercise_id")
+      .notNull()
+      .references(() => tabletopExercises.id, { onDelete: "cascade" }),
+    facilitatorUserId: uuid("facilitator_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    status: tabletopSessionStatusEnum("status").notNull().default("scheduled"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    currentSequence: integer("current_sequence").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    exerciseIdx: index("tabletop_sessions_exercise_id_idx").on(t.exerciseId),
+    statusIdx: index("tabletop_sessions_status_idx").on(t.status),
+  })
+);
+
+export const tabletopSessionParticipants = pgTable(
+  "tabletop_session_participants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => tabletopSessions.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    roleName: text("role_name").notNull(),
+    joinedAt: timestamp("joined_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    sessionIdx: index("tabletop_session_participants_session_id_idx").on(t.sessionId),
+    uniqueUserIdx: uniqueIndex("tabletop_session_participants_session_user_idx").on(t.sessionId, t.userId),
+  })
+);
+
+export const tabletopSessionResponses = pgTable(
+  "tabletop_session_responses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => tabletopSessions.id, { onDelete: "cascade" }),
+    injectId: uuid("inject_id")
+      .notNull()
+      .references(() => tabletopInjects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    roleName: text("role_name").notNull(),
+    response: text("response").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    sessionIdx: index("tabletop_session_responses_session_id_idx").on(t.sessionId),
+    injectIdx: index("tabletop_session_responses_inject_id_idx").on(t.injectId),
+    userIdx: index("tabletop_session_responses_user_id_idx").on(t.userId),
+  })
+);
+
+export const tabletopFindings = pgTable(
+  "tabletop_findings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => tabletopSessions.id, { onDelete: "cascade" }),
+    injectId: uuid("inject_id").references(() => tabletopInjects.id, { onDelete: "set null" }),
+    gap: text("gap").notNull(),
+    severity: tabletopFindingSeverityEnum("severity").notNull(),
+    assignedTo: text("assigned_to"),
+    dueDate: timestamp("due_date", { withTimezone: true }),
+    linkedNavigatorScenarioId: uuid("linked_navigator_scenario_id").references(() => navigatorScenarios.id, {
+      onDelete: "set null",
+    }),
+    status: tabletopFindingStatusEnum("status").notNull().default("open"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    sessionIdx: index("tabletop_findings_session_id_idx").on(t.sessionId),
+    injectIdx: index("tabletop_findings_inject_id_idx").on(t.injectId),
+    statusIdx: index("tabletop_findings_status_idx").on(t.status),
+  })
+);
+
 export type Finding = typeof findings.$inferSelect;
 export type NewFinding = typeof findings.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -1268,11 +2448,15 @@ export type Team = typeof teams.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type UserPreference = typeof userPreferences.$inferSelect;
 export type UserStack = typeof userStack.$inferSelect;
+export type ProjectFindingStackMatch = typeof projectFindingStackMatches.$inferSelect;
+export type WatchlistItem = typeof watchlistItems.$inferSelect;
+export type WatchlistDelivery = typeof watchlistDeliveries.$inferSelect;
 export type Alert = typeof alerts.$inferSelect;
 export type JiraAutomationConnection =
   typeof jiraAutomationConnections.$inferSelect;
 export type JiraAutomationDelivery = typeof jiraAutomationDeliveries.$inferSelect;
 export type Source = typeof sources.$inferSelect;
+export type SourceReliabilitySnapshot = typeof sourceReliabilitySnapshots.$inferSelect;
 export type Document = typeof documents.$inferSelect;
 export type DocChunk = typeof docChunks.$inferSelect;
 export type KgEntity = typeof kgEntities.$inferSelect;
@@ -1285,14 +2469,42 @@ export type ActorNeighbor = typeof actorNeighbors.$inferSelect;
 export type NavigatorConfig = typeof navigatorConfigs.$inferSelect;
 export type NavigatorScenario = typeof navigatorScenarios.$inferSelect;
 export type NavigatorAction = typeof navigatorActions.$inferSelect;
+export type NavigatorActionSlaEvent = typeof navigatorActionSlaEvents.$inferSelect;
 export type NavigatorDetection = typeof navigatorDetections.$inferSelect;
 export type RiskEntry = typeof riskEntries.$inferSelect;
 export type RiskToleranceProfile = typeof riskToleranceProfiles.$inferSelect;
 export type ComplianceMapping = typeof complianceMappings.$inferSelect;
+export type ComplianceControl = typeof complianceControls.$inferSelect;
+export type ProjectComplianceSettings = typeof projectComplianceSettings.$inferSelect;
+export type ProjectComplianceFramework = typeof projectComplianceFrameworks.$inferSelect;
 export type Playbook = typeof playbooks.$inferSelect;
+export type Incident = typeof incidents.$inferSelect;
+export type TheHiveConnection = typeof thehiveConnections.$inferSelect;
+export type MsTeamsWebhookConnection = typeof msTeamsWebhookConnections.$inferSelect;
+export type EmailDigestConnection = typeof emailDigestConnections.$inferSelect;
+export type VulnScannerConnection = typeof vulnScannerConnections.$inferSelect;
+export type VulnScannerAsset = typeof vulnScannerAssets.$inferSelect;
+export type VulnScannerAssetCve = typeof vulnScannerAssetCves.$inferSelect;
+export type VulnScannerCveExposure = typeof vulnScannerCveExposures.$inferSelect;
+export type PlaybookIncidentReview = typeof playbookIncidentReviews.$inferSelect;
+export type PlaybookIncidentReviewStep = typeof playbookIncidentReviewSteps.$inferSelect;
+export type PlaybookIncidentReviewToolAction = typeof playbookIncidentReviewToolActions.$inferSelect;
+export type TabletopExercise = typeof tabletopExercises.$inferSelect;
+export type TabletopInject = typeof tabletopInjects.$inferSelect;
+export type TabletopRole = typeof tabletopRoles.$inferSelect;
+export type TabletopSession = typeof tabletopSessions.$inferSelect;
+export type TabletopSessionParticipant = typeof tabletopSessionParticipants.$inferSelect;
+export type TabletopSessionResponse = typeof tabletopSessionResponses.$inferSelect;
+export type TabletopFinding = typeof tabletopFindings.$inferSelect;
 export type UserAiKey = typeof userAiKeys.$inferSelect;
 export type AgentSetting = typeof agentSettings.$inferSelect;
 export type CustomAgent = typeof customAgents.$inferSelect;
 export type AgentRun = typeof agentRuns.$inferSelect;
 export type AgentRunEvent = typeof agentRunEvents.$inferSelect;
 export type AgentOutput = typeof agentOutputs.$inferSelect;
+export type Ioc = typeof iocs.$inferSelect;
+export type IocTaxiiConnection = typeof iocTaxiiConnections.$inferSelect;
+export type IocSource = typeof iocSources.$inferSelect;
+export type IocEnrichmentKey = typeof iocEnrichmentKeys.$inferSelect;
+export type IocEnrichment = typeof iocEnrichments.$inferSelect;
+export type IocEnrichmentJob = typeof iocEnrichmentJobs.$inferSelect;

@@ -1,0 +1,83 @@
+---
+title: "Integrations payloads"
+section: "Reference"
+description: "Payload formats for Slack, Teams, SOAR webhooks, and Jira Automation."
+order: 7
+lastUpdated: "2026-06-07"
+---
+
+# Integrations payloads
+
+This page documents the payloads the platform sends to common integrations.
+
+## Slack incoming webhooks
+
+Slack uses a simple payload:
+
+```json
+{
+  "text": "*CVE-2024-12345 — Example title*\nSeverity: high | Agent: vuln | CVSS: 8.1\n<https://source.example|Source>\nTags: kev, actively-exploited\n<https://app.example/findings/uuid|Open in Threat Intel>"
+}
+```
+
+## Microsoft Teams incoming webhooks
+
+Teams uses a MessageCard-compatible payload:
+
+```json
+{
+  "@type": "MessageCard",
+  "@context": "http://schema.org/extensions",
+  "summary": "Finding: ...",
+  "themeColor": "0076D7",
+  "title": "CVE-2024-12345 — Example title",
+  "text": "Severity: high | Agent: vuln | CVSS: 8.1\nSource: https://...\nOpen: https://.../findings/uuid",
+  "potentialAction": [
+    {
+      "@type": "OpenUri",
+      "name": "Open in Threat Intel",
+      "targets": [{ "os": "default", "uri": "https://.../findings/uuid" }]
+    }
+  ]
+}
+```
+
+## SOAR webhooks
+
+SOAR webhooks receive a structured payload intended for automation:
+
+```json
+{
+  "finding": {
+    "id": "uuid",
+    "agent": "vuln",
+    "title": "Example title",
+    "summary": "…",
+    "severity": "high",
+    "cveId": "CVE-2024-12345",
+    "cvss": { "score": 8.1, "vector": "CVSS:3.1/..." },
+    "tags": ["kev", "actively-exploited"],
+    "source": { "url": "https://...", "title": "..." },
+    "poc": { "url": "https://...", "level": "poc" },
+    "publishedAt": "2026-06-01T12:00:00.000Z",
+    "createdAt": "2026-06-01T12:00:00.000Z",
+    "url": "https://app.example/findings/uuid"
+  },
+  "actionItems": [],
+  "sentAt": "2026-06-07T12:00:00.000Z"
+}
+```
+
+## Jira Automation webhooks
+
+Jira Automation receives the same payload structure as SOAR webhooks, so you can write a rule that:
+
+1. Parses `finding.*`
+2. Creates an issue
+3. Copies fields (summary, severity, links) into Jira fields
+
+## Notes
+
+- Deliveries can be filtered using connection criteria (agent, severity, min CVSS, KEV required, tags, etc.).
+- The platform sends one request per finding per enabled connection that matches criteria.
+

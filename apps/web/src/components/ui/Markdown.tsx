@@ -2,6 +2,7 @@
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { fixText } from "../../lib/text";
 
 export function Markdown({
   children,
@@ -73,7 +74,7 @@ export function Markdown({
           ),
         }}
       >
-        {children}
+        {fixText(children)}
       </ReactMarkdown>
     </div>
   );

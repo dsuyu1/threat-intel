@@ -94,13 +94,18 @@ export const handler = async (event: APIGatewayProxyEventV2, _ctx: Context): Pro
   if (!validation.ok) return json(400, { error: validation.error });
 
   const client = new LambdaClient({});
-  await client.send(
-    new InvokeCommand({
-      FunctionName: runnerFunctionName,
-      InvocationType: "Event",
-      Payload: Buffer.from(JSON.stringify(payload), "utf8"),
-    })
-  );
+  try {
+    await client.send(
+      new InvokeCommand({
+        FunctionName: runnerFunctionName,
+        InvocationType: "Event",
+        Payload: Buffer.from(JSON.stringify(payload), "utf8"),
+      })
+    );
+  } catch (err) {
+    console.error("[onDemandEnqueue] Invoke failed", err);
+    return json(502, { error: "Failed to enqueue run" });
+  }
 
   return json(202, { ok: true });
 };

@@ -1,5 +1,7 @@
 export const runtime = "edge";
 
+import { getOptionalRequestContext } from "@cloudflare/next-on-pages";
+
 import { getDb, agentRuns, customAgents, userAiKeys } from "@ti/db";
 import { and, eq } from "drizzle-orm";
 import { hasNavigatorAccess } from "../../../../../lib/local-user";
@@ -18,6 +20,13 @@ function isSystemAgentKey(v: string): v is SystemAgentKey {
 }
 
 function readEnv(name: string): string | null {
+  const ctx = getOptionalRequestContext();
+  const rawFromBindings = (ctx as any)?.env?.[name];
+  if (typeof rawFromBindings === "string") {
+    const v = rawFromBindings.trim();
+    return v ? v : null;
+  }
+
   const raw = (globalThis as any)?.process?.env?.[name];
   if (typeof raw !== "string") return null;
   const v = raw.trim();

@@ -28,8 +28,20 @@ function parseDays(value: unknown) {
   return i > 0 && i <= 365 ? i : 90;
 }
 
+function coerceJson(value: unknown) {
+  if (typeof value !== "string") return value;
+  const s = value.trim();
+  if (!s) return null;
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+}
+
 function parseTactics(attributes: unknown): { tactics: string[]; tacticLabels: string[] } {
-  const anyAttrs = attributes as any;
+  const obj = coerceJson(attributes) ?? attributes;
+  const anyAttrs = obj as any;
   const tactics = Array.isArray(anyAttrs?.tactics) ? anyAttrs.tactics.map((x: any) => String(x)) : [];
   const tacticLabels = Array.isArray(anyAttrs?.tacticLabels)
     ? anyAttrs.tacticLabels.map((x: any) => String(x))
@@ -141,7 +153,7 @@ export async function GET(req: Request) {
   const d3Unique = new Map<string, { id: string; name: string; url: string | null; category: string | null }>();
 
   for (const r of d3Rows) {
-    const d3Attrs = r.d3Attributes as any;
+    const d3Attrs = (coerceJson(r.d3Attributes) ?? r.d3Attributes) as any;
     const entry = { id: r.d3Id, name: r.d3Name };
     const arr = viaMap.get(r.mitigationId) ?? [];
     arr.push(entry);
@@ -199,4 +211,3 @@ export async function GET(req: Request) {
     links: { findings: `/findings?mitreId=${encodeURIComponent(techniqueId)}&days=${encodeURIComponent(String(days))}` },
   });
 }
-

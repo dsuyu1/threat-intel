@@ -9,6 +9,7 @@ import { DefendHeatmap } from "../../../../../components/navigator/DefendHeatmap
 import { MarkValidatedButton } from "../../../../../components/navigator/MarkValidatedButton";
 import { NavigatorScopeEditor } from "../../../../../components/navigator/NavigatorScopeEditor";
 import { ActorIcon } from "../../../../../components/ui/ActorIcon";
+import { buildDefendHeatmapColumns } from "../../../../../lib/defend-heatmap";
 import { toIsoStringSafe } from "../../../../../lib/dates";
 import { hasNavigatorAccess } from "../../../../../lib/local-user";
 import { scoreBand, type NavigatorRiskAppetite } from "../../../../../lib/navigator";
@@ -445,7 +446,7 @@ export default async function NavigatorPage({
   })();
 
   const defendDays = 90;
-  const defendColumns = stage === "defend" ? await buildDefendColumns(db, defendDays) : null;
+  const defendColumns = stage === "defend" ? await buildDefendHeatmapColumns({ db, days: defendDays }) : null;
 
   const currentHrefParams: Record<string, string | undefined> = {
     stage,

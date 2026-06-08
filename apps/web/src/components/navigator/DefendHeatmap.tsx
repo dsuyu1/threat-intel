@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 type TechniqueTile = {
@@ -10,6 +10,8 @@ type TechniqueTile = {
   mentions90d: number;
   itw90d: number;
   actorCount: number;
+  d3fendCount: number;
+  subtechniques?: TechniqueTile[];
 };
 
 type TacticColumn = {
@@ -58,6 +60,12 @@ function safeErrorMessage(err: unknown) {
   return String(anyErr?.message ?? err ?? "Unknown error");
 }
 
+function parentTechniqueId(id: string) {
+  const v = String(id ?? "").toUpperCase();
+  const idx = v.indexOf(".");
+  return idx >= 0 ? v.slice(0, idx) : v;
+}
+
 export function DefendHeatmap({
   projectSlug,
   days,
@@ -68,18 +76,46 @@ export function DefendHeatmap({
   columns: TacticColumn[];
 }) {
   const [selectedId, setSelectedId] = useState<string>("");
+  const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [data, setData] = useState<DrilldownResponse | null>(null);
+  const topScrollRef = useRef<HTMLDivElement | null>(null);
+  const matrixScrollRef = useRef<HTMLDivElement | null>(null);
+  const matrixContentRef = useRef<HTMLDivElement | null>(null);
+  const scrollSyncLock = useRef(false);
+  const [matrixScrollWidth, setMatrixScrollWidth] = useState(0);
 
-  const selectedMeta = useMemo(() => {
+  const selectedGroupMeta = useMemo(() => {
     if (!selectedId) return null;
+    const parentId = parentTechniqueId(selectedId);
     for (const c of columns) {
-      const found = c.items.find((x) => x.id === selectedId);
+      const found = c.items.find((x) => x.id === parentId);
       if (found) return found;
     }
     return null;
   }, [columns, selectedId]);
+
+  const selectedMeta = useMemo(() => {
+    if (!selectedId) return null;
+    if (!selectedGroupMeta) return null;
+    if (selectedGroupMeta.id === selectedId) return selectedGroupMeta;
+    return selectedGroupMeta.subtechniques?.find((x) => x.id === selectedId) ?? null;
+  }, [selectedGroupMeta, selectedId]);
+
+  const isGroupView = Boolean(selectedGroupMeta?.subtechniques?.length) && selectedGroupMeta?.id === selectedId;
+
+  const topSubtechnique = useMemo(() => {
+    const subs = selectedGroupMeta?.subtechniques ?? [];
+    if (!subs.length) return null;
+    return subs.reduce((best, cur) => {
+      if (!best) return cur;
+      if ((cur.bucket ?? 0) !== (best.bucket ?? 0)) return (cur.bucket ?? 0) > (best.bucket ?? 0) ? cur : best;
+      if ((cur.mentions90d ?? 0) !== (best.mentions90d ?? 0))
+        return (cur.mentions90d ?? 0) > (best.mentions90d ?? 0) ? cur : best;
+      return cur.id.localeCompare(best.id) < 0 ? cur : best;
+    }, null as TechniqueTile | null);
+  }, [selectedGroupMeta]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -115,60 +151,170 @@ export function DefendHeatmap({
     };
   }, [days, projectSlug, selectedId]);
 
-  return (
-    <div className="mt-8">
-      <div className="flex items-end justify-between gap-6">
-        <div>
-          <h2 className="text-sm font-semibold tracking-wide uppercase text-zinc-600 dark:text-zinc-400">
-            MITRE matrix map
-          </h2>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Techniques are colored by mentions in the last <span className="tabular-nums">{nf(days)}</span> days.
-            Click a technique to see mitigations and mapped D3FEND countermeasures.
-          </p>
-        </div>
-        <div className="text-xs text-zinc-500 dark:text-zinc-400">
-          Buckets: <span className="tabular-nums">0</span> (none) → <span className="tabular-nums">5</span> (most)
-        </div>
-      </div>
+  useEffect(() => {
+    const content = matrixContentRef.current;
+    if (!content) return;
 
-      <div className="mt-5 overflow-x-auto">
-        <div className="flex gap-4 min-w-max pb-2">
-          {columns.map((c) => (
-            <div key={c.slug} className="min-w-[250px] max-w-[250px]">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{c.label}</div>
-                <div className="text-[11px] text-zinc-500 dark:text-zinc-400 tabular-nums">{nf(c.items.length)}</div>
+    const update = () => setMatrixScrollWidth(content.scrollWidth);
+    update();
+
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(update);
+    ro.observe(content);
+    return () => ro.disconnect();
+  }, [columns, expanded]);
+
+  function syncScroll(from: "top" | "matrix") {
+    if (scrollSyncLock.current) return;
+    scrollSyncLock.current = true;
+
+    const top = topScrollRef.current;
+    const matrix = matrixScrollRef.current;
+    if (top && matrix) {
+      if (from === "top") matrix.scrollLeft = top.scrollLeft;
+      else top.scrollLeft = matrix.scrollLeft;
+    }
+
+    requestAnimationFrame(() => {
+      scrollSyncLock.current = false;
+    });
+  }
+
+  return (
+    <div className={expanded ? "" : "mt-8"}>
+      {expanded ? (
+        <div
+          className="fixed inset-0 z-40 bg-black/40"
+          onClick={() => setExpanded(false)}
+          role="button"
+          tabIndex={0}
+          aria-label="Close matrix"
+        />
+      ) : null}
+
+      <div
+        className={
+          expanded
+            ? "fixed inset-4 md:inset-8 z-50 flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-2xl"
+            : ""
+        }
+      >
+        <div className={expanded ? "p-5 border-b border-zinc-200/70 dark:border-zinc-800/80" : ""}>
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold tracking-wide uppercase text-zinc-600 dark:text-zinc-400">
+                MITRE matrix map
+              </h2>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                Techniques are colored by mentions in the last <span className="tabular-nums">{nf(days)}</span> days.
+                Click a technique to see mitigations and mapped D3FEND countermeasures.
+              </p>
+            </div>
+            <div className="shrink-0 flex items-center gap-3">
+              <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                Buckets: <span className="tabular-nums">0</span> (none) → <span className="tabular-nums">5</span>{" "}
+                (most)
               </div>
-              <div className="mt-3 space-y-2">
-                {c.items.map((it) => (
-                  <button
-                    key={`${c.slug}-${it.id}`}
-                    type="button"
-                    onClick={() => setSelectedId(it.id)}
-                    className={`w-full rounded-xl border px-3 py-2 text-left transition-colors ${bucketClass(it.bucket)} ${
-                      selectedId === it.id ? "ring-2 ring-sky-400/60 dark:ring-sky-700/60" : ""
-                    }`}
-                    title={`${it.id} — ${it.name}\nMentions: ${nf(it.mentions90d)}\nIn the wild: ${nf(it.itw90d)}\nActors: ${nf(it.actorCount)}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="text-[11px] font-mono text-zinc-700 dark:text-zinc-300">{it.id}</div>
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                className="inline-flex items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-black/30 px-3 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:bg-white dark:hover:bg-black/40"
+              >
+                {expanded ? "Collapse" : "Expand"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className={expanded ? "p-5 pt-4 flex-1 min-h-0" : "mt-5"}>
+          <div
+            className={`${expanded ? "h-full " : ""}flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/40 dark:bg-black/20 overflow-hidden`}
+          >
+            <div
+              ref={topScrollRef}
+              onScroll={() => syncScroll("top")}
+              className="overflow-x-auto border-b border-zinc-200/70 dark:border-zinc-800/80"
+              aria-label="Matrix horizontal scroll"
+            >
+              <div
+                style={{ width: matrixScrollWidth ? `${matrixScrollWidth}px` : undefined }}
+                className="h-4"
+              />
+            </div>
+            <div
+              ref={matrixScrollRef}
+              onScroll={() => syncScroll("matrix")}
+              className={`overflow-x-auto overflow-y-auto ${expanded ? "flex-1 min-h-0" : "max-h-[70vh]"}`}
+            >
+              <div ref={matrixContentRef} className="flex gap-4 min-w-max pb-4 px-4 pt-4">
+              {columns.map((c) => (
+                <div key={c.slug} className="min-w-[250px] max-w-[250px]">
+                  <div className="sticky top-0 z-10 bg-white/80 dark:bg-zinc-950/80 backdrop-blur pb-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{c.label}</div>
                       <div className="text-[11px] text-zinc-500 dark:text-zinc-400 tabular-nums">
-                        {nf(it.mentions90d)}
-                        {it.itw90d ? <span className="ml-1 text-rose-600 dark:text-rose-400">*</span> : null}
+                        {nf(c.items.length)}
                       </div>
                     </div>
-                    <div className="mt-0.5 text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                      {it.name}
-                    </div>
-                  </button>
-                ))}
-                {!c.items.length ? (
-                  <div className="text-xs text-zinc-500 dark:text-zinc-400">No techniques.</div>
-                ) : null}
+                  </div>
+
+                  <div className="mt-2 space-y-2">
+                    {c.items.map((it) => {
+                      const subCount = it.subtechniques?.length ?? 0;
+                      return (
+                        <button
+                          key={`${c.slug}-${it.id}`}
+                          type="button"
+                          onClick={() => setSelectedId(it.id)}
+                          className={`w-full rounded-xl border px-3 py-2 text-left transition-colors ${bucketClass(it.bucket)} ${
+                            parentTechniqueId(selectedId) === it.id
+                              ? "ring-2 ring-sky-400/60 dark:ring-sky-700/60"
+                              : ""
+                          }`}
+                          title={`${it.id} — ${it.name}\nMentions: ${nf(it.mentions90d)}\nIn the wild: ${nf(it.itw90d)}\nActors: ${nf(it.actorCount)}\nD3FEND mappings: ${nf(it.d3fendCount)}${
+                            subCount ? `\nSub-techniques: ${nf(subCount)}` : ""
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex items-center gap-2">
+                              <div className="text-[11px] font-mono text-zinc-700 dark:text-zinc-300">{it.id}</div>
+                              {subCount ? (
+                                <span className="rounded-full bg-black/5 dark:bg-white/5 px-2 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-300 tabular-nums">
+                                  +{nf(subCount)}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="shrink-0 flex items-center gap-2">
+                              {it.d3fendCount ? (
+                                <span className="rounded-full bg-indigo-500/10 dark:bg-indigo-400/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 tabular-nums">
+                                  D3 {nf(it.d3fendCount)}
+                                </span>
+                              ) : null}
+                              <div className="text-[11px] text-zinc-500 dark:text-zinc-400 tabular-nums">
+                                {nf(it.mentions90d)}
+                                {it.itw90d ? <span className="ml-1 text-rose-600 dark:text-rose-400">*</span> : null}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-0.5 text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                            {it.name}
+                          </div>
+                        </button>
+                      );
+                    })}
+                    {!c.items.length ? (
+                      <div className="text-xs text-zinc-500 dark:text-zinc-400">No techniques.</div>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
               </div>
             </div>
-          ))}
+          </div>
+          <div className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+            Legend: <span className="font-semibold">D3</span> = D3FEND mappings, <span className="font-semibold">*</span>{" "}
+            = in the wild. Use the top scrollbar to pan across tactics.
+          </div>
         </div>
       </div>
 
@@ -190,8 +336,12 @@ export function DefendHeatmap({
                     {data?.technique?.name ?? selectedMeta?.name ?? selectedId}
                   </div>
                   <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400 tabular-nums">
-                    Mentions: {nf(data?.counts.mentions ?? selectedMeta?.mentions90d ?? 0)} • ITW:{" "}
-                    {nf(data?.counts.itw ?? selectedMeta?.itw90d ?? 0)} • Actors: {nf(selectedMeta?.actorCount ?? 0)}
+                    Mentions:{" "}
+                    {nf(isGroupView ? selectedGroupMeta?.mentions90d ?? 0 : data?.counts.mentions ?? selectedMeta?.mentions90d ?? 0)}{" "}
+                    • ITW:{" "}
+                    {nf(isGroupView ? selectedGroupMeta?.itw90d ?? 0 : data?.counts.itw ?? selectedMeta?.itw90d ?? 0)}{" "}
+                    • Actors: {nf(isGroupView ? selectedGroupMeta?.actorCount ?? 0 : selectedMeta?.actorCount ?? 0)} • D3FEND:{" "}
+                    {nf(isGroupView ? selectedGroupMeta?.d3fendCount ?? 0 : selectedMeta?.d3fendCount ?? 0)}
                   </div>
                 </div>
                 <button
@@ -204,13 +354,47 @@ export function DefendHeatmap({
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <Link
-                  href={`/findings?mitreId=${encodeURIComponent(selectedId)}&days=${encodeURIComponent(String(days))}`}
-                  className="inline-flex rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 px-3 py-2 text-sm font-medium hover:opacity-95"
-                >
-                  Open findings
-                </Link>
+                {isGroupView && topSubtechnique ? (
+                  <>
+                    <Link
+                      href={`/findings?mitreId=${encodeURIComponent(topSubtechnique.id)}&days=${encodeURIComponent(String(days))}`}
+                      className="inline-flex rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 px-3 py-2 text-sm font-medium hover:opacity-95"
+                    >
+                      Open findings (top sub-technique)
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(topSubtechnique.id)}
+                      className="inline-flex rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-black/30 px-3 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:bg-white dark:hover:bg-black/40"
+                    >
+                      View {topSubtechnique.id}
+                    </button>
+                  </>
+                ) : (
+                  <Link
+                    href={`/findings?mitreId=${encodeURIComponent(selectedId)}&days=${encodeURIComponent(String(days))}`}
+                    className="inline-flex rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 px-3 py-2 text-sm font-medium hover:opacity-95"
+                  >
+                    Open findings
+                  </Link>
+                )}
+                {selectedGroupMeta && selectedGroupMeta.id !== selectedId ? (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(selectedGroupMeta.id)}
+                    className="inline-flex rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-black/30 px-3 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:bg-white dark:hover:bg-black/40"
+                  >
+                    Parent: {selectedGroupMeta.id}
+                  </button>
+                ) : null}
               </div>
+
+              {isGroupView ? (
+                <div className="mt-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-black/20 p-4 text-sm text-zinc-700 dark:text-zinc-300">
+                  Pick a sub-technique to see mitigations and D3FEND countermeasures. The parent tile aggregates metrics
+                  across its sub-techniques.
+                </div>
+              ) : null}
 
               {loading ? (
                 <div className="mt-5 text-sm text-zinc-600 dark:text-zinc-400">Loading…</div>
@@ -228,6 +412,49 @@ export function DefendHeatmap({
                   <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
                     {data.technique.description}
                   </p>
+                </div>
+              ) : null}
+
+              {selectedGroupMeta?.subtechniques?.length ? (
+                <div className="mt-6">
+                  <div className="text-xs font-semibold tracking-wide uppercase text-zinc-600 dark:text-zinc-400">
+                    Sub-techniques
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {selectedGroupMeta.subtechniques.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setSelectedId(s.id)}
+                        className={`w-full rounded-xl border px-3 py-2 text-left transition-colors ${
+                          selectedId === s.id
+                            ? "border-sky-200 dark:border-sky-900/60 bg-sky-50/60 dark:bg-sky-950/25"
+                            : "border-zinc-200 dark:border-zinc-800 bg-white/40 dark:bg-black/20 hover:bg-white/60 dark:hover:bg-black/30"
+                        }`}
+                        title={`${s.id} — ${s.name}\nMentions: ${nf(s.mentions90d)}\nD3FEND mappings: ${nf(s.d3fendCount)}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">{s.id}</div>
+                            <div className="mt-0.5 text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                              {s.name}
+                            </div>
+                          </div>
+                          <div className="shrink-0 flex items-center gap-2">
+                            {s.d3fendCount ? (
+                              <span className="rounded-full bg-indigo-500/10 dark:bg-indigo-400/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 tabular-nums">
+                                D3 {nf(s.d3fendCount)}
+                              </span>
+                            ) : null}
+                            <div className="text-[11px] text-zinc-500 dark:text-zinc-400 tabular-nums">
+                              {nf(s.mentions90d)}
+                              {s.itw90d ? <span className="ml-1 text-rose-600 dark:text-rose-400">*</span> : null}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ) : null}
 

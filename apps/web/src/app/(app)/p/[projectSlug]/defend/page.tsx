@@ -44,6 +44,7 @@ export default async function DefendPage({
   const days = parseDays(pickOne(sp.days), 90);
   const db = getDb();
   const columns = await buildDefendHeatmapColumns({ db, days });
+  const hasAnyTechniques = columns.some((c) => c.items.length > 0);
 
   return (
     <div className="max-w-[90ch] mx-auto px-8 py-10">
@@ -51,9 +52,18 @@ export default async function DefendPage({
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">MITRE matrix map</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           ATT&CK Enterprise technique heatmap scored by findings mentions. Click a technique to see ATT&CK mitigations
-          and mapped MITRE D3FEND countermeasures.
+          and mapped D3FEND countermeasures.
         </p>
       </div>
+
+      {!hasAnyTechniques ? (
+        <div className="mt-6 rounded-2xl border border-amber-200/80 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20 px-5 py-4">
+          <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">No techniques available yet</div>
+          <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
+            Run <span className="font-mono">pnpm run:ttp -- --force</span> to (re)import MITRE ATT&CK techniques, then refresh this page.
+          </p>
+        </div>
+      ) : null}
 
       <DefendHeatmap projectSlug={p.projectSlug} days={days} columns={columns} />
     </div>

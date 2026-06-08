@@ -735,26 +735,45 @@ export async function runTtpAgent() {
     process.env["TTP_FORCE"] === "true";
   if (forceFetch) console.log("[TtpAgent] Force fetch enabled (ignoring ETag/Last-Modified).");
 
-  const headers: Record<string, string> = {
+  const baseHeaders: Record<string, string> = {
     Accept: "application/json",
     "User-Agent": "threat-intel-platform/1.0",
   };
+  const headers: Record<string, string> = { ...baseHeaders };
   if (!forceFetch) {
     if (src.etag) headers["If-None-Match"] = src.etag;
     if (src.lastModified) headers["If-Modified-Since"] = src.lastModified;
   }
 
-  const res = await fetch(src.url, { headers });
+  let res = await fetch(src.url, { headers });
   if (res.status === 304) {
-    console.log(
-      "[TtpAgent] STIX unchanged (304). Tip: if you changed TtpAgent parsing logic, re-run with --force once."
-    );
-    await db
-      .update(sources)
-      .set({ lastFetchedAt: new Date(), updatedAt: new Date() })
-      .where(eq(sources.id, src.id));
-    await syncMitreCampaignsFromWeb(new Date());
-    return;
+    const techniqueCountRows = await db
+      .select({ techniqueCount: sql<number>`count(*)` })
+      .from(kgEntities)
+      .where(eq(kgEntities.kind, "technique"));
+
+    const existingTechniques = Number(techniqueCountRows[0]?.techniqueCount ?? 0);
+    if (existingTechniques <= 0 && !forceFetch) {
+      console.log(
+        "[TtpAgent] STIX unchanged (304) but techniques are missing; re-fetching once to seed the database. Tip: you can run pnpm run:ttp -- --force."
+      );
+      res = await fetch(src.url, { headers: baseHeaders });
+    } else {
+      console.log(
+        "[TtpAgent] STIX unchanged (304). Tip: if you changed TtpAgent parsing logic, re-run with --force once."
+      );
+      await db
+        .update(sources)
+        .set({ lastFetchedAt: new Date(), updatedAt: new Date() })
+        .where(eq(sources.id, src.id));
+      await syncMitreCampaignsFromWeb(new Date());
+      if (syncD3fend) {
+        await syncD3fendMappings(new Date(), src.id);
+      } else {
+        console.log("[TtpAgent] Skipping D3FEND sync (TTP_SYNC_D3FEND=0).");
+      }
+      return;
+    }
   }
   if (!res.ok) throw new Error(`STIX fetch failed: ${res.status} ${res.statusText}`);
   if (!res.body) throw new Error("STIX fetch returned no body");

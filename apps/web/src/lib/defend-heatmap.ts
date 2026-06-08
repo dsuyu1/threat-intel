@@ -1,5 +1,6 @@
 import { findings, kgEntities, kgRelations, type getDb } from "@ti/db";
 import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 export type DefendTechniqueTile = {
   id: string;
@@ -8,6 +9,8 @@ export type DefendTechniqueTile = {
   mentions90d: number;
   itw90d: number;
   actorCount: number;
+  d3fendCount: number;
+  subtechniques?: DefendTechniqueTile[];
 };
 
 export type DefendTacticColumn = {
@@ -54,9 +57,28 @@ const ATTACK_TACTIC_SLUG_BY_LABEL: Record<string, (typeof ATTACK_TACTIC_ORDER)[n
   Object.entries(ATTACK_TACTIC_LABEL_BY_SLUG).map(([slug, label]) => [label.toLowerCase(), slug as any])
 ) as any;
 
+function coerceJson(value: unknown) {
+  if (typeof value !== "string") return value;
+  const s = value.trim();
+  if (!s) return null;
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+}
+
 function normalizeTechniqueTactics(attributes: unknown): string[] {
-  const anyAttrs = attributes as any;
-  const raw = Array.isArray(anyAttrs?.tactics) ? anyAttrs.tactics : [];
+  const obj = coerceJson(attributes) ?? attributes;
+  const anyAttrs = obj as any;
+  const raw = Array.isArray(anyAttrs?.tactics)
+    ? anyAttrs.tactics
+    : typeof anyAttrs?.tactics === "string"
+      ? String(anyAttrs.tactics)
+          .split(",")
+          .map((x) => x.trim())
+          .filter(Boolean)
+      : [];
   const out: string[] = [];
   const allowed = new Set<string>(ATTACK_TACTIC_ORDER);
   const seen = new Set<string>();
@@ -146,7 +168,10 @@ export async function buildDefendHeatmapColumns({
 }): Promise<DefendTacticColumn[]> {
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-  const [techRows, actorRows, findingRows] = await Promise.all([
+  const t2m = alias(kgRelations, "t2m");
+  const m2d3 = alias(kgRelations, "m2d3");
+
+  const [techRows, actorRows, findingRows, d3Rows] = await Promise.all([
     db
       .select({
         id: kgEntities.entityId,
@@ -189,10 +214,42 @@ export async function buildDefendHeatmapColumns({
         )
       )
       .limit(20000),
+
+    db
+      .select({
+        techniqueId: t2m.fromId,
+        d3fendCount: sql<number>`count(distinct ${m2d3.toId})`,
+      })
+      .from(t2m)
+      .innerJoin(
+        m2d3,
+        and(
+          eq(m2d3.type, "mitigation_mapped_to_d3fend"),
+          eq(m2d3.fromKind, "mitigation"),
+          eq(m2d3.toKind, "d3fend_technique"),
+          eq(m2d3.fromId, t2m.toId)
+        )
+      )
+      .where(
+        and(
+          eq(t2m.type, "technique_mitigated_by"),
+          eq(t2m.fromKind, "technique"),
+          eq(t2m.toKind, "mitigation")
+        )
+      )
+      .groupBy(t2m.fromId)
+      .limit(20000),
   ]);
 
   const actorCountByTechnique = new Map<string, number>();
-  for (const r of actorRows) actorCountByTechnique.set(String(r.techniqueId), Number(r.actorCount ?? 0));
+  for (const r of actorRows) {
+    actorCountByTechnique.set(String(r.techniqueId).toUpperCase(), Number(r.actorCount ?? 0));
+  }
+
+  const d3fendCountByTechnique = new Map<string, number>();
+  for (const r of d3Rows) {
+    d3fendCountByTechnique.set(String(r.techniqueId).toUpperCase(), Number(r.d3fendCount ?? 0));
+  }
 
   const mentionsByTechnique = new Map<string, number>();
   const itwByTechnique = new Map<string, number>();
@@ -207,7 +264,7 @@ export async function buildDefendHeatmapColumns({
     }
   }
 
-  const bucketFor = bucketizeCounts(Array.from(mentionsByTechnique.values()));
+  const bucketForTechnique = bucketizeCounts(Array.from(mentionsByTechnique.values()));
 
   const columns: DefendTacticColumn[] = ATTACK_TACTIC_ORDER.map((slug) => ({
     slug,
@@ -216,24 +273,105 @@ export async function buildDefendHeatmapColumns({
   }));
   const colBySlug = new Map(columns.map((c) => [c.slug, c] as const));
 
+  type BaseTile = Omit<DefendTechniqueTile, "bucket" | "subtechniques">;
+  type Group = { parentId: string; parent?: BaseTile; subs: BaseTile[] };
+  const groupsByTactic = new Map<string, Map<string, Group>>();
+
   for (const t of techRows) {
-    const tid = String(t.id);
+    const tid = String(t.id).toUpperCase();
     const tactics = normalizeTechniqueTactics(t.attributes);
     if (!tactics.length) continue;
     const mentions90d = mentionsByTechnique.get(tid) ?? 0;
     const itw90d = itwByTechnique.get(tid) ?? 0;
     const actorCount = actorCountByTechnique.get(tid) ?? 0;
-    const tile: DefendTechniqueTile = {
+    const d3fendCount = d3fendCountByTechnique.get(tid) ?? 0;
+    const base: BaseTile = {
       id: tid,
       name: String(t.name),
-      bucket: bucketFor(mentions90d),
       mentions90d,
       itw90d,
       actorCount,
+      d3fendCount,
     };
 
+    const parentId = tid.includes(".") ? tid.split(".")[0]! : tid;
+    const isSub = tid !== parentId;
+
     for (const slug of tactics) {
-      colBySlug.get(slug as any)?.items.push(tile);
+      let map = groupsByTactic.get(slug);
+      if (!map) {
+        map = new Map<string, Group>();
+        groupsByTactic.set(slug, map);
+      }
+      let group = map.get(parentId);
+      if (!group) {
+        group = { parentId, subs: [] };
+        map.set(parentId, group);
+      }
+      if (isSub) group.subs.push(base);
+      else group.parent = base;
+    }
+  }
+
+  const aggregatedCounts: number[] = [];
+  const aggMetaByTactic = new Map<string, Array<{ group: Group; mentions: number; itw: number; actors: number; d3: number; name: string }>>();
+
+  for (const slug of ATTACK_TACTIC_ORDER) {
+    const map = groupsByTactic.get(slug) ?? null;
+    if (!map) continue;
+    const rows: Array<{ group: Group; mentions: number; itw: number; actors: number; d3: number; name: string }> = [];
+    for (const group of map.values()) {
+      const members: BaseTile[] = [];
+      if (group.parent) members.push(group.parent);
+      members.push(...group.subs);
+
+      const mentions = members.reduce((acc, x) => acc + (x.mentions90d ?? 0), 0);
+      const itw = members.reduce((acc, x) => acc + (x.itw90d ?? 0), 0);
+      const actors = members.reduce((acc, x) => acc + (x.actorCount ?? 0), 0);
+      const d3 = members.reduce((acc, x) => acc + (x.d3fendCount ?? 0), 0);
+      const name = group.parent?.name ?? group.subs[0]?.name ?? group.parentId;
+      aggregatedCounts.push(mentions);
+      rows.push({ group, mentions, itw, actors, d3, name });
+    }
+    aggMetaByTactic.set(slug, rows);
+  }
+
+  const bucketForGroup = bucketizeCounts(aggregatedCounts);
+
+  for (const slug of ATTACK_TACTIC_ORDER) {
+    const col = colBySlug.get(slug);
+    if (!col) continue;
+    const rows = aggMetaByTactic.get(slug) ?? [];
+    for (const r of rows) {
+      const subs = r.group.subs
+        .slice()
+        .sort((a, b) => {
+          const ba = bucketForTechnique(a.mentions90d);
+          const bb = bucketForTechnique(b.mentions90d);
+          if (bb !== ba) return bb - ba;
+          if (b.mentions90d !== a.mentions90d) return b.mentions90d - a.mentions90d;
+          return a.id.localeCompare(b.id);
+        })
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          bucket: bucketForTechnique(s.mentions90d),
+          mentions90d: s.mentions90d,
+          itw90d: s.itw90d,
+          actorCount: s.actorCount,
+          d3fendCount: s.d3fendCount,
+        }));
+
+      col.items.push({
+        id: r.group.parentId,
+        name: r.name,
+        bucket: bucketForGroup(r.mentions),
+        mentions90d: r.mentions,
+        itw90d: r.itw,
+        actorCount: r.actors,
+        d3fendCount: r.d3,
+        subtechniques: subs.length ? subs : undefined,
+      });
     }
   }
 
@@ -249,4 +387,3 @@ export async function buildDefendHeatmapColumns({
 
   return columns;
 }
-

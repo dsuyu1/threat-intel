@@ -128,7 +128,7 @@ export function DefendHeatmap({
           </p>
         </div>
         <div className="text-xs text-zinc-500 dark:text-zinc-400">
-          Buckets: <span className="tabular-nums">0</span> (none) â†’ <span className="tabular-nums">5</span> (most)
+          Buckets: <span className="tabular-nums">0</span> (none) → <span className="tabular-nums">5</span> (most)
         </div>
       </div>
 
@@ -149,7 +149,7 @@ export function DefendHeatmap({
                     className={`w-full rounded-xl border px-3 py-2 text-left transition-colors ${bucketClass(it.bucket)} ${
                       selectedId === it.id ? "ring-2 ring-sky-400/60 dark:ring-sky-700/60" : ""
                     }`}
-                    title={`${it.id} â€” ${it.name}\nMentions: ${nf(it.mentions90d)}\nIn the wild: ${nf(it.itw90d)}\nActors: ${nf(it.actorCount)}`}
+                    title={`${it.id} — ${it.name}\nMentions: ${nf(it.mentions90d)}\nIn the wild: ${nf(it.itw90d)}\nActors: ${nf(it.actorCount)}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="text-[11px] font-mono text-zinc-700 dark:text-zinc-300">{it.id}</div>
@@ -190,8 +190,8 @@ export function DefendHeatmap({
                     {data?.technique?.name ?? selectedMeta?.name ?? selectedId}
                   </div>
                   <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400 tabular-nums">
-                    Mentions: {nf(data?.counts.mentions ?? selectedMeta?.mentions90d ?? 0)} â€¢ ITW:{" "}
-                    {nf(data?.counts.itw ?? selectedMeta?.itw90d ?? 0)} â€¢ Actors: {nf(selectedMeta?.actorCount ?? 0)}
+                    Mentions: {nf(data?.counts.mentions ?? selectedMeta?.mentions90d ?? 0)} • ITW:{" "}
+                    {nf(data?.counts.itw ?? selectedMeta?.itw90d ?? 0)} • Actors: {nf(selectedMeta?.actorCount ?? 0)}
                   </div>
                 </div>
                 <button
@@ -213,7 +213,7 @@ export function DefendHeatmap({
               </div>
 
               {loading ? (
-                <div className="mt-5 text-sm text-zinc-600 dark:text-zinc-400">Loadingâ€¦</div>
+                <div className="mt-5 text-sm text-zinc-600 dark:text-zinc-400">Loading…</div>
               ) : error ? (
                 <div className="mt-5 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/60 dark:bg-rose-950/20 p-4 text-sm text-rose-800 dark:text-rose-200">
                   {error}
@@ -326,4 +326,3 @@ export function DefendHeatmap({
     </div>
   );
 }
-

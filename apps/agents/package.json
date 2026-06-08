@@ -32,6 +32,7 @@
     "logs:exploit": "serverless logs --function exploitAgent --tail --stage prod"
   },
   "dependencies": {
+    "@aws-sdk/client-lambda": "^3.0.0",
     "@ti/db": "workspace:*",
     "@neondatabase/serverless": "^0.9.0",
     "dotenv": "^16.6.1",

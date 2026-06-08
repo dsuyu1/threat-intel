@@ -31,7 +31,7 @@ type SourceRow = {
   enabled: boolean;
 };
 
-type DashboardData = {
+export type DashboardData = {
   range: RangeId;
   rangeLabel: string;
   trend: { current: TrendPoint[]; previous: TrendPoint[]; changePct: number | null };
@@ -1101,4 +1101,3 @@ export function CustomizableDashboard({
     </section>
   );
 }
-

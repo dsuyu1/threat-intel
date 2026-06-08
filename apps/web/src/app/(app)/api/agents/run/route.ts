@@ -76,15 +76,24 @@ function onDemandUrl() {
   return readEnv("AGENTS_ON_DEMAND_URL");
 }
 
+function onDemandSecret() {
+  return readEnv("AGENTS_ON_DEMAND_SECRET");
+}
+
 async function enqueueOnDemandRun(payload: unknown) {
   const url = onDemandUrl();
   if (!url) {
     throw new Error("AGENTS_ON_DEMAND_URL is not set (required on Cloudflare/Edge deployments)");
   }
 
+  const secret = onDemandSecret();
+  if (!secret) {
+    throw new Error("AGENTS_ON_DEMAND_SECRET is not set (required to call the on-demand runner)");
+  }
+
   const res = await fetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", authorization: `Bearer ${secret}` },
     body: JSON.stringify(payload),
   });
 

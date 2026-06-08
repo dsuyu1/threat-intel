@@ -1,14 +1,10 @@
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
-import Link from "next/link";
 import { agentRuns, agentSettings, documents, findings, getDb, incidents, kgEntities, navigatorActions, navigatorDetections, navigatorScenarios, playbookIncidentReviewSteps, playbookIncidentReviewToolActions, playbookIncidentReviews, riskEntries, riskToleranceProfiles, sources } from "@ti/db";
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
-import { DonutChart, DualLineChart } from "../../../../components/dashboard/charts";
-import { IncidentMetricsCard } from "../../../../components/dashboard/IncidentMetricsCard";
+import { CustomizableDashboard } from "../../../../components/dashboard/CustomizableDashboard";
 import { KpiCard } from "../../../../components/dashboard/KpiCard";
-import { SourceLogoStrip } from "../../../../components/dashboard/SourceLogoStrip";
-import { Card, CardContent, CardHeader } from "../../../../components/ui/Card";
 import { SYSTEM_AGENTS } from "../../../../lib/agents";
 import { toIsoStringSafe } from "../../../../lib/dates";
 import { hasNavigatorAccess } from "../../../../lib/local-user";
@@ -81,29 +77,6 @@ function rangeLabel(range: RangeId) {
   if (range === "6m") return "6 Months";
   if (range === "30d") return "30 Days";
   return "14 Days";
-}
-
-function pill(value: string, kind: "agent" | "severity"): { label: string; className: string } {
-  if (kind === "agent") {
-    const map: Record<string, { label: string; className: string }> = {
-      vuln: { label: "CVE", className: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/20" },
-      attack: { label: "Attack", className: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/20" },
-      ttp: { label: "TTP", className: "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/20" },
-      exploit: { label: "Exploit", className: "bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/20" },
-      malware: { label: "Malware", className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20" },
-    };
-    return map[value] ?? { label: value, className: "bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/20" };
-  }
-
-  const smap: Record<string, { label: string; className: string }> = {
-    critical: { label: "critical", className: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/20" },
-    high: { label: "high", className: "bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/20" },
-    medium: { label: "medium", className: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/20" },
-    low: { label: "low", className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20" },
-    unscored: { label: "unscored", className: "bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/20" },
-    info: { label: "info", className: "bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/20" },
-  };
-  return smap[value] ?? { label: value, className: "bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/20" };
 }
 
 function isMissingTable(err: unknown) {
@@ -1044,12 +1017,17 @@ export default async function DashboardHome({
 }) {
   const sp = await searchParams;
   const range = normalizeRange(pickOne(sp.range));
+  const customize = (() => {
+    const raw = String(pickOne(sp.customize) ?? "").trim().toLowerCase();
+    return raw === "1" || raw === "true" || raw === "yes";
+  })();
 
   const p = await params;
   const ctx = await getViewerContext({ projectSlug: p.projectSlug });
   const riskAccess = hasNavigatorAccess({ tier: ctx.user.tier });
   const data = await getDashboardData({ range, projectId: ctx.project.id, userId: ctx.user.id, riskAccess });
-  const currentHref = { range: data.range };
+  const dashboardData = data as any;
+  const currentHref = { range: data.range, customize: customize ? "1" : undefined };
 
   const ingestionHint = (() => {
     if (!data.kpis.agentsSchemaReady) return "Run pnpm db:migrate";
@@ -1080,6 +1058,13 @@ export default async function DashboardHome({
         </div>
 
         <div className="lg:ml-auto w-full lg:w-auto flex flex-col sm:flex-row gap-2">
+          <a
+            href={buildHref(`/p/${p.projectSlug}`, currentHref, { customize: customize ? undefined : "1" })}
+            className="no-print inline-flex items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-black/30 px-4 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:bg-white dark:hover:bg-black/40"
+          >
+            {customize ? "Done customizing" : "Customize dashboard"}
+          </a>
+
           {riskAccess ? (
             <a
               href={`/p/${p.projectSlug}/reports/executive?print=1`}
@@ -1177,419 +1162,14 @@ export default async function DashboardHome({
         />
       </section>
 
-      <section className="mt-6 grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <div className="lg:col-span-3 space-y-4">
-          <Card className="shadow-sm dark:shadow-black/30">
-            <CardHeader
-              title="Findings report"
-              description={`${data.rangeLabel} published volume (current vs previous period).`}
-              border={false}
-              className="px-4 py-3"
-              right={
-                <div className="flex items-center gap-2">
-                  <div className="hidden sm:flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-black/20 p-1">
-                    {tabs.map((t) => {
-                      const active = t.id === data.range;
-                      return (
-                        <a
-                          key={t.id}
-                          href={buildHref(`/p/${p.projectSlug}`, currentHref, { range: t.id })}
-                          className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
-                            active
-                              ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                              : "text-zinc-600 dark:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/5"
-                          }`}
-                        >
-                          {t.label}
-                        </a>
-                      );
-                    })}
-                  </div>
-
-                  {typeof data.trend.changePct === "number" ? (
-                    <div
-                      className={`hidden sm:inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium tabular-nums ${
-                        data.trend.changePct >= 0
-                          ? "border-emerald-200/70 dark:border-emerald-900/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                          : "border-rose-200/70 dark:border-rose-900/50 bg-rose-500/10 text-rose-700 dark:text-rose-300"
-                      }`}
-                      title="Percent change vs previous period: (current - previous) / previous. Hidden when previous is 0."
-                    >
-                      <span aria-hidden="true">{data.trend.changePct >= 0 ? "↑" : "↓"}</span>
-                      <span className="ml-1">{Math.round(data.trend.changePct)}%</span>
-                    </div>
-                  ) : null}
-
-                  <a
-                    href="/findings"
-                    className="inline-flex items-center rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-black/30 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-white dark:hover:bg-black/40"
-                  >
-                    Open feed
-                  </a>
-                </div>
-              }
-            />
-            <CardContent dense className="pt-2 pb-2">
-              <DualLineChart
-                primary={data.trend.current}
-                secondary={data.trend.previous}
-                height={210}
-                showRangeLabels={false}
-                showEndpointLabelsInChart
-                xLabel={data.range.endsWith("m") ? "Month" : "Day"}
-                yLabel="Findings"
-                showYAxisTickLabels
-              />
-            </CardContent>
-          </Card>
-
-          <IncidentMetricsCard
-            schemaReady={data.incidentMetrics.schemaReady}
-            rangeLabel={data.rangeLabel}
-            metrics={data.incidentMetrics.metrics}
-            effectiveness={data.incidentMetrics.effectiveness}
-          />
-        </div>
-
-        <div className="space-y-4">
-          <Card className="shadow-sm dark:shadow-black/30">
-            <CardHeader
-              dense
-              title="Ops health"
-              description="Ingestion + agent runs (24h)."
-              border={false}
-              right={
-                <a href="/agents" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
-                  Open
-                </a>
-              }
-            />
-            <CardContent dense>
-              {!data.ops.agentRuns.schemaReady ? (
-                <div className="py-2 text-sm text-zinc-500">
-                  Agent run tables are missing. Run <span className="font-mono">pnpm db:migrate</span>.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <a
-                    href="/data/sources"
-                    className={`block rounded-xl border px-3 py-2.5 transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${
-                      Number(data.ops.sources.staleEnabled ?? 0) > 0
-                        ? "border-amber-200/80 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20"
-                        : "border-zinc-200/70 dark:border-zinc-800/80"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Sources freshness</div>
-                        <div className="mt-0.5 text-[11px] text-zinc-500 tabular-nums">
-                          {nf(Number(data.ops.sources.enabled ?? 0))} enabled • {nf(Number(data.ops.sources.staleEnabled ?? 0))} stale
-                        </div>
-                      </div>
-                      <div className="text-base font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
-                        {data.ops.sources.lastFetchedAt
-                          ? new Date(data.ops.sources.lastFetchedAt).toLocaleTimeString("en-US", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
-                          : "—"}
-                      </div>
-                    </div>
-                  </a>
-
-                  <a
-                    href="/agents"
-                    className={`block rounded-xl border px-3 py-2.5 transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${
-                      Number(data.ops.agentRuns.failed24h ?? 0) > 0
-                        ? "border-rose-200/80 dark:border-rose-900/60 bg-rose-50/60 dark:bg-rose-950/20"
-                        : "border-zinc-200/70 dark:border-zinc-800/80"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Agent failures</div>
-                        <div className="mt-0.5 text-[11px] text-zinc-500 tabular-nums">
-                          {nf(Number(data.ops.agentRuns.failed24h ?? 0))} failed
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-[11px] text-zinc-500">Last run</div>
-                        <div className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
-                          {data.ops.agentRuns.lastRun
-                            ? `${data.ops.agentRuns.lastRun.agentKey} • ${data.ops.agentRuns.lastRun.status}`
-                            : "—"}
-                        </div>
-                      </div>
-                    </div>
-                  </a>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-sm dark:shadow-black/30">
-            <CardHeader
-              title="Risk trend"
-              description="Open residual exposure (last 14 days)."
-              border={false}
-              right={
-                <a
-                  href={`/p/${p.projectSlug}/risk`}
-                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
-                >
-                  Open
-                </a>
-              }
-            />
-            <CardContent className="pt-2">
-              {!riskAccess ? (
-                <div className="py-4 text-sm text-zinc-500">Risk management is available on Pro.</div>
-              ) : !data.riskSchemaReady ? (
-                <div className="py-4 text-sm text-zinc-500">
-                  Risk tables need a DB migration. Run <span className="font-mono">pnpm db:migrate</span>.
-                </div>
-              ) : data.risk ? (
-                <div>
-                  <div className="flex items-end justify-between gap-4">
-                    <div>
-                      <div className="text-[11px] text-zinc-500">Open residual</div>
-                      <div className="mt-1 text-2xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
-                        {nf(data.risk.openResidual)}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[11px] text-zinc-500">Open / over tol</div>
-                      <div className="mt-1 text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
-                        {nf(data.risk.openCount)} / {nf(data.risk.overToleranceCount)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-3">
-                    <DualLineChart primary={data.risk.trend.current} secondary={data.risk.trend.previous} height={170} />
-                  </div>
-                  {typeof data.risk.trend.changePct === "number" ? (
-                    <div
-                      className="mt-2 text-[11px] text-zinc-500"
-                      title="Percent change vs previous period: (current - previous) / previous. Hidden when previous is 0."
-                    >
-                      Period change: <span className="tabular-nums">{Math.round(data.risk.trend.changePct)}%</span>
-                    </div>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="py-4 text-sm text-zinc-500">Validate a Navigator scenario to start tracking risk.</div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-sm dark:shadow-black/30">
-            <CardHeader
-              title="Finding mix"
-              description={`${data.rangeLabel} severity breakdown.`}
-              border={false}
-              right={
-                <a href="/findings" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
-                  Open feed
-                </a>
-              }
-            />
-            <CardContent className="pt-2">
-              <DonutChart
-                title="Finding severity mix"
-                segments={[
-                  { label: "Critical", value: Number(data.mix.severity.critical ?? 0), color: "rgb(244 63 94)", href: "/findings?band=critical" },
-                  { label: "High", value: Number(data.mix.severity.high ?? 0), color: "rgb(249 115 22)", href: "/findings?band=high" },
-                  { label: "Medium", value: Number(data.mix.severity.medium ?? 0), color: "rgb(245 158 11)", href: "/findings?band=medium" },
-                  { label: "Low", value: Number(data.mix.severity.low ?? 0), color: "rgb(16 185 129)", href: "/findings?band=low" },
-                  { label: "Info", value: Number(data.mix.severity.info ?? 0), color: "rgb(14 165 233)", href: "/findings?band=unscored" },
-                  { label: "Unscored", value: Number(data.mix.severity.unscored ?? 0), color: "rgb(113 113 122)", href: "/findings?band=unscored" },
-                ]}
-              />
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      <section className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2 shadow-sm dark:shadow-black/30">
-          <CardHeader
-            title="Latest findings"
-            description="Most recent items across all agents."
-            border={false}
-            right={
-              <a href="/findings" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
-                See all
-              </a>
-            }
-          />
-          <CardContent className="pt-2">
-            <div className="divide-y divide-zinc-200/70 dark:divide-zinc-800/80">
-              {data.latestFindings.length ? (
-                data.latestFindings.map((f) => {
-                  const agentMeta = pill(f.agent, "agent");
-                  const severityKey = (() => {
-                    if (f.severity) return String(f.severity);
-                    const n = Number(f.cvssScore);
-                    if (!Number.isFinite(n)) return "unscored";
-                    if (n >= 9) return "critical";
-                    if (n >= 7) return "high";
-                    if (n >= 4) return "medium";
-                    return "low";
-                  })();
-                  const severityMeta = pill(severityKey, "severity");
-                  const when = f.publishedAt ?? f.createdAt;
-                  return (
-                    <Link
-                      key={f.id}
-                      href={`/findings/${f.id}`}
-                      className="block py-3 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg px-2 -mx-2 transition-colors"
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className="shrink-0 mt-0.5 flex flex-col gap-2">
-                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] ${severityMeta.className}`}>
-                            {severityMeta.label}
-                          </span>
-                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] ${agentMeta.className}`}>
-                            {agentMeta.label}
-                          </span>
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{f.title}</div>
-                          <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-zinc-500">
-                            {f.cveId ? <span className="tabular-nums">{f.cveId}</span> : null}
-                            {when ? (
-                              <span className="tabular-nums">
-                                {new Date(when).toLocaleString("en-US", { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                              </span>
-                            ) : (
-                              <span>—</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })
-              ) : (
-                <div className="py-4 text-sm text-zinc-500">No findings yet.</div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm dark:shadow-black/30">
-         <CardHeader
-           title="Needs attention"
-           description="What to triage right now."
-           border={false}
-           right={
-              <a href={`/p/${p.projectSlug}/risk`} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
-                Open
-              </a>
-           }
-         />
-           <CardContent className="pt-2">
-             <div className="space-y-2">
-              <a
-                href={`/p/${p.projectSlug}/navigator?stage=validate&validation=needs_review`}
-                className={`flex items-center justify-between gap-4 rounded-xl px-3 py-3 border transition-colors ${
-                  !riskAccess
-                    ? "border-zinc-200/60 dark:border-zinc-800/60 hover:bg-black/5 dark:hover:bg-white/5"
-                    : (data.attention.navigatorUnvalidated ?? 0) >= 250
-                      ? "border-rose-200/80 dark:border-rose-900/60 bg-rose-50/60 dark:bg-rose-950/20 hover:bg-rose-50/80 dark:hover:bg-rose-950/30"
-                      : (data.attention.navigatorUnvalidated ?? 0) >= 100
-                        ? "border-amber-200/80 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20 hover:bg-amber-50/80 dark:hover:bg-amber-950/30"
-                        : "border-zinc-200/60 dark:border-zinc-800/60 hover:bg-black/5 dark:hover:bg-white/5"
-                }`}
-              >
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Navigator review backlog</div>
-                  <div className="mt-0.5 text-[11px] text-zinc-500">
-                    Unvalidated and in progress (excludes inferred).
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
-                    {!riskAccess ? "Pro" : nf(data.attention.navigatorUnvalidated ?? 0)}
-                  </div>
-                  {riskAccess ? (
-                    <div className="mt-0.5 text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
-                      {nf(data.attention.navigatorInProgress ?? 0)} in review
-                    </div>
-                  ) : null}
-                </div>
-              </a>
-
-              <a
-                href={`/p/${p.projectSlug}/risk`}
-                className="flex items-center justify-between gap-4 rounded-xl px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-              >
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Over tolerance</div>
-                  <div className="mt-0.5 text-[11px] text-zinc-500">Open risks above your thresholds.</div>
-                </div>
-                <div className="text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
-                  {!riskAccess ? "Pro" : !data.riskSchemaReady ? "—" : nf(data.risk?.overToleranceCount ?? 0)}
-                </div>
-              </a>
-            </div>
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="mt-6">
-        {data.ops.sources.schemaReady ? (
-          <SourceLogoStrip
-            sources={data.ops.sources.all}
-            wrap
-            maxHeight={260}
-            description={
-              <span className="tabular-nums">
-                {nf(Number(data.ops.sources.total ?? 0))} total • {nf(Number(data.ops.sources.enabled ?? 0))} enabled •{" "}
-                {nf(Number(data.ops.sources.staleEnabled ?? 0))} stale (24h) • Last fetch:{" "}
-                {data.ops.sources.lastFetchedAt
-                  ? new Date(data.ops.sources.lastFetchedAt).toLocaleString("en-US", {
-                      month: "short",
-                      day: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                  : "—"}
-              </span>
-            }
-            right={
-              <div className="flex items-center gap-3">
-                <a href="/data/sources" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
-                  Manage
-                </a>
-                <a href="/data/sources/new" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
-                  Add
-                </a>
-              </div>
-            }
-          />
-        ) : (
-          <Card className="shadow-sm dark:shadow-black/30">
-            <CardHeader
-              title="Sources"
-              description="RSS + STIX feeds powering ingestion."
-              border={false}
-              right={
-                <a href="/data/sources" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
-                  Open
-                </a>
-              }
-            />
-            <CardContent className="pt-2">
-              <div className="py-4 text-sm text-zinc-500">
-                Source tables are missing. Run <span className="font-mono">pnpm db:migrate</span>.
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </section>
+      <CustomizableDashboard
+        projectSlug={p.projectSlug}
+        riskAccess={riskAccess}
+        data={dashboardData}
+        tabs={tabs}
+        currentHref={currentHref}
+        initialEditing={customize}
+      />
     </div>
   );
 }

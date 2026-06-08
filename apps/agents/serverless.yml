@@ -10,6 +10,7 @@ provider:
     DATABASE_URL: ${ssm:/threat-intel/DATABASE_URL}
     OPENAI_API_KEY: ${ssm:/threat-intel/OPENAI_API_KEY}
     TI_SECRETS_KEY: ${ssm:/threat-intel/TI_SECRETS_KEY}
+    AGENTS_ON_DEMAND_SECRET: ${ssm:/threat-intel/AGENTS_ON_DEMAND_SECRET}
     NVD_API_KEY: ${ssm:/threat-intel/NVD_API_KEY}
     GITHUB_TOKEN: ${ssm:/threat-intel/GITHUB_TOKEN}
     MALWAREBAZAAR_API_KEY: ${ssm:/threat-intel/MALWAREBAZAAR_API_KEY}
@@ -29,6 +30,12 @@ provider:
           Action:
             - bedrock:InvokeModel
           Resource: "*"
+        # Allow the HTTP enqueue function to invoke the on-demand runner asynchronously.
+        - Effect: Allow
+          Action:
+            - lambda:InvokeFunction
+          Resource:
+            - arn:aws:lambda:${self:provider.region}:*:function:${self:service}-${sls:stage}-onDemandAgentRunner*
 
 plugins:
   - serverless-esbuild
@@ -182,3 +189,15 @@ functions:
   onDemandAgentRunner:
     handler: src/handlers/on-demand.handler
     description: "Runs system/custom agents on-demand (invoked by the web app)"
+
+  onDemandEnqueue:
+    handler: src/handlers/on-demand-enqueue.handler
+    description: "HTTP endpoint that validates a shared secret and enqueues on-demand agent runs"
+    timeout: 10
+    memorySize: 128
+    environment:
+      ON_DEMAND_RUNNER_FUNCTION_NAME: ${self:service}-${sls:stage}-onDemandAgentRunner
+    events:
+      - httpApi:
+          path: /on-demand
+          method: post

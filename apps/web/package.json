@@ -2,6 +2,7 @@
   "name": "web",
   "version": "0.0.1",
   "private": true,
+  "packageManager": "pnpm@9.0.0",
   "scripts": {
     "generate:learn": "node ./scripts/generate-learn.mjs",
     "predev": "node ./scripts/generate-learn.mjs",
@@ -69,9 +70,9 @@
     "@types/topojson-client": "^3.1.0",
     "eslint": "^8.57.0",
     "eslint-config-next": "15.5.2",
-    "pnpm": "^11.5.2",
     "postcss": "^8.4.0",
     "tailwindcss": "^4.1.8",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vercel": "47.0.4"
   }
 }

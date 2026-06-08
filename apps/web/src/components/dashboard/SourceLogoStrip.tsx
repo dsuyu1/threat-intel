@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Card, CardContent, CardHeader } from "../ui/Card";
 
 type SourceRow = {
@@ -30,19 +31,29 @@ function faviconUrl(hostname: string) {
   return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=64`;
 }
 
-export function SourceLogoStrip({ sources }: { sources: SourceRow[] }) {
+export function SourceLogoStrip({
+  sources,
+  description = "Live feeds powering ingestion (RSS + STIX).",
+  right,
+}: {
+  sources: SourceRow[];
+  description?: ReactNode;
+  right?: ReactNode;
+}) {
   return (
     <Card>
       <CardHeader
         title="Sources"
-        description="Live feeds powering ingestion (RSS + STIX)."
+        description={description}
         right={
-          <a
-            href="/data/sources"
-            className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            View table
-          </a>
+          right ?? (
+            <a
+              href="/data/sources"
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              View table
+            </a>
+          )
         }
       />
       <CardContent>

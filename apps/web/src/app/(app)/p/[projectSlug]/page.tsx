@@ -2,11 +2,12 @@ export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { agentSettings, documents, findings, getDb, incidents, kgEntities, navigatorActions, navigatorDetections, navigatorScenarios, playbookIncidentReviewSteps, playbookIncidentReviewToolActions, playbookIncidentReviews, riskEntries, riskToleranceProfiles } from "@ti/db";
-import { and, asc, desc, eq, gte, inArray, isNotNull, lt, ne, or, sql } from "drizzle-orm";
-import { DualLineChart } from "../../../../components/dashboard/charts";
+import { agentRuns, agentSettings, documents, findings, getDb, incidents, kgEntities, navigatorActions, navigatorDetections, navigatorScenarios, playbookIncidentReviewSteps, playbookIncidentReviewToolActions, playbookIncidentReviews, riskEntries, riskToleranceProfiles, sources } from "@ti/db";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { DonutChart, DualLineChart } from "../../../../components/dashboard/charts";
 import { IncidentMetricsCard } from "../../../../components/dashboard/IncidentMetricsCard";
 import { KpiCard } from "../../../../components/dashboard/KpiCard";
+import { SourceLogoStrip } from "../../../../components/dashboard/SourceLogoStrip";
 import { Card, CardContent, CardHeader } from "../../../../components/ui/Card";
 import { SYSTEM_AGENTS } from "../../../../lib/agents";
 import { toIsoStringSafe } from "../../../../lib/dates";
@@ -526,11 +527,142 @@ async function getTrendSeries(params: { db: ReturnType<typeof getDb>; range: Ran
 
 async function getDashboardData(params: { range: RangeId; projectId: string; userId: string; riskAccess: boolean }) {
   const db = getDb();
+  const bounds = rangeBounds(params.range);
 
   const [{ totalFindings }] = await db.select({ totalFindings: sql<number>`count(*)` }).from(findings);
   const [{ totalDocs }] = await db.select({ totalDocs: sql<number>`count(*)` }).from(documents);
 
   const [{ lastIngestedAt }] = await db.select({ lastIngestedAt: sql<Date | null>`max(${findings.createdAt})` }).from(findings);
+
+  const ops = {
+    sources: {
+      schemaReady: true,
+      total: 0,
+      enabled: 0,
+      staleEnabled: 0,
+      lastFetchedAt: null as string | null,
+      top: [] as Array<{ id: string; name: string; url: string; type: string; enabled: boolean }>,
+    },
+    agentRuns: {
+      schemaReady: true,
+      failed24h: 0,
+      lastRun: null as null | { agentKey: string; status: string; finishedAt: string | null },
+    },
+  };
+
+  try {
+    const [{ total }] = await db.select({ total: sql<number>`count(*)` }).from(sources);
+    const [{ enabled }] = await db
+      .select({ enabled: sql<number>`count(*)` })
+      .from(sources)
+      .where(eq(sources.enabled, true));
+
+    const now = new Date();
+    const staleCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const [{ stale }] = await db
+      .select({ stale: sql<number>`count(*)` })
+      .from(sources)
+      .where(and(eq(sources.enabled, true), or(isNull(sources.lastFetchedAt), lt(sources.lastFetchedAt, staleCutoff))));
+
+    const [{ lastFetchedAt }] = await db
+      .select({ lastFetchedAt: sql<Date | null>`max(${sources.lastFetchedAt})` })
+      .from(sources)
+      .where(eq(sources.enabled, true));
+
+    const top = await db
+      .select({
+        id: sources.id,
+        name: sources.name,
+        url: sources.url,
+        type: sources.type,
+        enabled: sources.enabled,
+      })
+      .from(sources)
+      .where(eq(sources.enabled, true))
+      .orderBy(desc(sources.reliability), desc(sources.lastFetchedAt), asc(sources.name))
+      .limit(14);
+
+    ops.sources.total = Number(total ?? 0);
+    ops.sources.enabled = Number(enabled ?? 0);
+    ops.sources.staleEnabled = Number(stale ?? 0);
+    ops.sources.lastFetchedAt = toIsoStringSafe(lastFetchedAt);
+    ops.sources.top = top.map((s) => ({
+      id: s.id,
+      name: String(s.name),
+      url: String(s.url),
+      type: String(s.type),
+      enabled: !!s.enabled,
+    }));
+  } catch (err) {
+    if (isMissingTable(err)) ops.sources.schemaReady = false;
+    else throw err;
+  }
+
+  try {
+    const now = new Date();
+    const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const [{ failed }] = await db
+      .select({ failed: sql<number>`count(*)` })
+      .from(agentRuns)
+      .where(and(eq(agentRuns.projectId, params.projectId), eq(agentRuns.status, "failed" as any), gte(agentRuns.startedAt, since)));
+
+    const [last] = await db
+      .select({ agentKey: agentRuns.agentKey, status: agentRuns.status, finishedAt: agentRuns.finishedAt })
+      .from(agentRuns)
+      .where(eq(agentRuns.projectId, params.projectId))
+      .orderBy(desc(agentRuns.startedAt))
+      .limit(1);
+
+    ops.agentRuns.failed24h = Number(failed ?? 0);
+    if (last) {
+      ops.agentRuns.lastRun = {
+        agentKey: String(last.agentKey),
+        status: String(last.status),
+        finishedAt: toIsoStringSafe(last.finishedAt),
+      };
+    }
+  } catch (err) {
+    if (isMissingTable(err)) ops.agentRuns.schemaReady = false;
+    else throw err;
+  }
+
+  const severityMix = { critical: 0, high: 0, medium: 0, low: 0, info: 0, unscored: 0 };
+  try {
+    const timeExpr = sql<Date>`coalesce(${findings.publishedAt}, ${findings.createdAt})`;
+    const severityExpr = sql<string>`case
+      when ${findings.severity} is not null and btrim(${findings.severity}) <> '' then lower(${findings.severity})
+      when ${findings.cvssScore} is not null and ${findings.cvssScore} ~ '^[0-9]+([.][0-9]+)?$' then
+        case
+          when (${findings.cvssScore}::numeric) >= 9 then 'critical'
+          when (${findings.cvssScore}::numeric) >= 7 then 'high'
+          when (${findings.cvssScore}::numeric) >= 4 then 'medium'
+          when (${findings.cvssScore}::numeric) > 0 then 'low'
+          else 'unscored'
+        end
+      else 'unscored'
+    end`;
+
+    const rows = await db
+      .select({ severity: severityExpr, total: sql<number>`count(*)` })
+      .from(findings)
+      .where(and(sql`${timeExpr} >= ${bounds.currentStart}`, sql`${timeExpr} < ${bounds.endExclusive}`))
+      .groupBy(severityExpr)
+      .limit(25);
+
+    for (const r of rows) {
+      const key = String(r.severity ?? "unscored");
+      const total = Number(r.total ?? 0);
+      if (key === "critical") severityMix.critical = total;
+      else if (key === "high") severityMix.high = total;
+      else if (key === "medium") severityMix.medium = total;
+      else if (key === "low") severityMix.low = total;
+      else if (key === "info") severityMix.info = total;
+      else severityMix.unscored += total;
+    }
+  } catch (err) {
+    if (!isMissingTable(err)) throw err;
+  }
 
   const trend = await getTrendSeries({ db, range: params.range });
 
@@ -864,6 +996,10 @@ async function getDashboardData(params: { range: RangeId; projectId: string; use
   return {
     range: params.range,
     rangeLabel: rangeLabel(params.range),
+    ops,
+    mix: {
+      severity: severityMix,
+    },
     incidentMetrics: {
       schemaReady: incidentMetrics.schemaReady,
       metrics: incidentMetrics.metrics,
@@ -918,10 +1054,13 @@ export default async function DashboardHome({
 
   const ingestionHint = (() => {
     if (!data.kpis.agentsSchemaReady) return "Run pnpm db:migrate";
-    if (!data.kpis.lastIngestedAt) return "Healthy";
-    const d = new Date(data.kpis.lastIngestedAt);
+    const last = data.ops.sources.lastFetchedAt ?? data.kpis.lastIngestedAt;
+    if (!last) return "Healthy";
+    const d = new Date(last);
     if (Number.isNaN(d.getTime())) return "Healthy";
-    return `Last ingest: ${d.toLocaleString("en-US", { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" })}`;
+    const stale = data.ops.sources.schemaReady ? Number(data.ops.sources.staleEnabled ?? 0) : 0;
+    const staleHint = stale > 0 ? ` • ${nf(stale)} stale sources` : "";
+    return `Last ingest: ${d.toLocaleString("en-US", { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" })}${staleHint}`;
   })();
 
   const tabs: Array<{ id: RangeId; label: string }> = [
@@ -1039,6 +1178,132 @@ export default async function DashboardHome({
         />
       </section>
 
+      <section className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          {data.ops.sources.schemaReady ? (
+            <SourceLogoStrip
+              sources={data.ops.sources.top}
+              description={
+                <span className="tabular-nums">
+                  {nf(Number(data.ops.sources.enabled ?? 0))} enabled •{" "}
+                  {nf(Number(data.ops.sources.staleEnabled ?? 0))} stale (24h) • Last fetch:{" "}
+                  {data.ops.sources.lastFetchedAt
+                    ? new Date(data.ops.sources.lastFetchedAt).toLocaleString("en-US", {
+                        month: "short",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "—"}
+                </span>
+              }
+              right={
+                <div className="flex items-center gap-3">
+                  <a href="/data/sources" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+                    Manage
+                  </a>
+                  <a href="/data/sources/new" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+                    Add
+                  </a>
+                </div>
+              }
+            />
+          ) : (
+            <Card className="shadow-sm dark:shadow-black/30">
+              <CardHeader
+                title="Sources"
+                description="RSS + STIX feeds powering ingestion."
+                border={false}
+                right={
+                  <a href="/data/sources" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+                    Open
+                  </a>
+                }
+              />
+              <CardContent className="pt-2">
+                <div className="py-4 text-sm text-zinc-500">
+                  Source tables are missing. Run <span className="font-mono">pnpm db:migrate</span>.
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        <Card className="shadow-sm dark:shadow-black/30">
+          <CardHeader
+            title="Ops health"
+            description="Ingestion + agent runs (last 24h)."
+            border={false}
+            right={
+              <a href="/agents" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+                Open
+              </a>
+            }
+          />
+          <CardContent className="pt-2">
+            {!data.ops.agentRuns.schemaReady ? (
+              <div className="py-4 text-sm text-zinc-500">
+                Agent run tables are missing. Run <span className="font-mono">pnpm db:migrate</span>.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <a
+                  href="/data/sources"
+                  className={`block rounded-xl border px-4 py-3 transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${
+                    Number(data.ops.sources.staleEnabled ?? 0) > 0
+                      ? "border-amber-200/80 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20"
+                      : "border-zinc-200/70 dark:border-zinc-800/80"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Sources freshness</div>
+                      <div className="mt-0.5 text-[11px] text-zinc-500 tabular-nums">
+                        {nf(Number(data.ops.sources.enabled ?? 0))} enabled • {nf(Number(data.ops.sources.staleEnabled ?? 0))} stale (24h)
+                      </div>
+                    </div>
+                    <div className="text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
+                      {data.ops.sources.lastFetchedAt
+                        ? new Date(data.ops.sources.lastFetchedAt).toLocaleTimeString("en-US", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "—"}
+                    </div>
+                  </div>
+                </a>
+
+                <a
+                  href="/agents"
+                  className={`block rounded-xl border px-4 py-3 transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${
+                    Number(data.ops.agentRuns.failed24h ?? 0) > 0
+                      ? "border-rose-200/80 dark:border-rose-900/60 bg-rose-50/60 dark:bg-rose-950/20"
+                      : "border-zinc-200/70 dark:border-zinc-800/80"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Agent failures</div>
+                      <div className="mt-0.5 text-[11px] text-zinc-500 tabular-nums">
+                        {nf(Number(data.ops.agentRuns.failed24h ?? 0))} failed in last 24h
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[11px] text-zinc-500">Last run</div>
+                      <div className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
+                        {data.ops.agentRuns.lastRun
+                          ? `${data.ops.agentRuns.lastRun.agentKey} • ${data.ops.agentRuns.lastRun.status}`
+                          : "—"}
+                      </div>
+                    </div>
+                  </div>
+                </a>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+
       <section className="mt-6 grid grid-cols-1 lg:grid-cols-4 gap-4">
         <Card className="lg:col-span-3 shadow-sm dark:shadow-black/30">
           <CardHeader
@@ -1087,60 +1352,89 @@ export default async function DashboardHome({
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm dark:shadow-black/30">
-           <CardHeader
-             title="Risk trend"
-             description="Open residual exposure (last 14 days)."
-             border={false}
-             right={
-              <a href={`/p/${p.projectSlug}/risk`} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
-                Open
-              </a>
-             }
-           />
-           <CardContent className="pt-2">
-            {!riskAccess ? (
-              <div className="py-4 text-sm text-zinc-500">Risk management is available on Pro.</div>
-            ) : !data.riskSchemaReady ? (
-              <div className="py-4 text-sm text-zinc-500">
-                Risk tables need a DB migration. Run <span className="font-mono">pnpm db:migrate</span>.
-              </div>
-            ) : data.risk ? (
-              <div>
-                <div className="flex items-end justify-between gap-4">
-                  <div>
-                    <div className="text-[11px] text-zinc-500">Open residual</div>
-                    <div className="mt-1 text-2xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
-                      {nf(data.risk.openResidual)}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[11px] text-zinc-500">Open / over tol</div>
-                    <div className="mt-1 text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
-                      {nf(data.risk.openCount)} / {nf(data.risk.overToleranceCount)}
-                    </div>
-                  </div>
+        <div className="space-y-4">
+          <Card className="shadow-sm dark:shadow-black/30">
+            <CardHeader
+              title="Risk trend"
+              description="Open residual exposure (last 14 days)."
+              border={false}
+              right={
+                <a
+                  href={`/p/${p.projectSlug}/risk`}
+                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  Open
+                </a>
+              }
+            />
+            <CardContent className="pt-2">
+              {!riskAccess ? (
+                <div className="py-4 text-sm text-zinc-500">Risk management is available on Pro.</div>
+              ) : !data.riskSchemaReady ? (
+                <div className="py-4 text-sm text-zinc-500">
+                  Risk tables need a DB migration. Run <span className="font-mono">pnpm db:migrate</span>.
                 </div>
+              ) : data.risk ? (
+                <div>
+                  <div className="flex items-end justify-between gap-4">
+                    <div>
+                      <div className="text-[11px] text-zinc-500">Open residual</div>
+                      <div className="mt-1 text-2xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
+                        {nf(data.risk.openResidual)}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[11px] text-zinc-500">Open / over tol</div>
+                      <div className="mt-1 text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
+                        {nf(data.risk.openCount)} / {nf(data.risk.overToleranceCount)}
+                      </div>
+                    </div>
+                  </div>
 
-                <div className="mt-3">
-                  <DualLineChart primary={data.risk.trend.current} secondary={data.risk.trend.previous} height={170} />
-                </div>
-                {typeof data.risk.trend.changePct === "number" ? (
-                  <div
-                    className="mt-2 text-[11px] text-zinc-500"
-                    title="Percent change vs previous period: (current - previous) / previous. Hidden when previous is 0."
-                  >
-                    Period change: <span className="tabular-nums">{Math.round(data.risk.trend.changePct)}%</span>
+                  <div className="mt-3">
+                    <DualLineChart primary={data.risk.trend.current} secondary={data.risk.trend.previous} height={170} />
                   </div>
-                ) : null}
-              </div>
-            ) : (
-              <div className="py-4 text-sm text-zinc-500">
-                Validate a Navigator scenario to start tracking risk.
-              </div>
-            )}
-           </CardContent>
-         </Card>
+                  {typeof data.risk.trend.changePct === "number" ? (
+                    <div
+                      className="mt-2 text-[11px] text-zinc-500"
+                      title="Percent change vs previous period: (current - previous) / previous. Hidden when previous is 0."
+                    >
+                      Period change: <span className="tabular-nums">{Math.round(data.risk.trend.changePct)}%</span>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="py-4 text-sm text-zinc-500">Validate a Navigator scenario to start tracking risk.</div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-sm dark:shadow-black/30">
+            <CardHeader
+              title="Finding mix"
+              description={`${data.rangeLabel} severity breakdown.`}
+              border={false}
+              right={
+                <a href="/findings" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+                  Open feed
+                </a>
+              }
+            />
+            <CardContent className="pt-2">
+              <DonutChart
+                title="Finding severity mix"
+                segments={[
+                  { label: "Critical", value: Number(data.mix.severity.critical ?? 0), color: "rgb(244 63 94)" },
+                  { label: "High", value: Number(data.mix.severity.high ?? 0), color: "rgb(249 115 22)" },
+                  { label: "Medium", value: Number(data.mix.severity.medium ?? 0), color: "rgb(245 158 11)" },
+                  { label: "Low", value: Number(data.mix.severity.low ?? 0), color: "rgb(16 185 129)" },
+                  { label: "Info", value: Number(data.mix.severity.info ?? 0), color: "rgb(14 165 233)" },
+                  { label: "Unscored", value: Number(data.mix.severity.unscored ?? 0), color: "rgb(113 113 122)" },
+                ]}
+              />
+            </CardContent>
+          </Card>
+        </div>
 
          <div className="lg:col-span-4">
            <IncidentMetricsCard

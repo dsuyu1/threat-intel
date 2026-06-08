@@ -82,6 +82,8 @@ function parseTags(tagsJson: string | null): string[] {
 }
 
 function parseEpssScore(value: unknown): number | null {
+  if (value == null) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
   const n = Number(value);
   if (!Number.isFinite(n)) return null;
   if (n < 0 || n > 1) return null;

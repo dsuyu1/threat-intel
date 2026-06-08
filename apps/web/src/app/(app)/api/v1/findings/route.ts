@@ -70,6 +70,9 @@ export async function GET(req: Request) {
   const cveIdAgg = sql<string | null>`max(${findings.cveId})`;
   const cvssScoreAgg = sql<number | null>`max(${findings.cvssScore})`;
   const cvssScoreTextAgg = sql<string | null>`(max(${findings.cvssScore}))::text`;
+  const epssScoreTextAgg = sql<string | null>`(max(${findings.epssScore}))::text`;
+  const epssPercentileTextAgg = sql<string | null>`(max(${findings.epssPercentile}))::text`;
+  const epssUpdatedAtAgg = sql<Date | null>`max(${findings.epssUpdatedAt})`;
   const severityAgg = sql<string>`case
     when max(${findings.cvssScore}) >= 9 then 'critical'
     when max(${findings.cvssScore}) >= 7 then 'high'
@@ -96,6 +99,9 @@ export async function GET(req: Request) {
       agent: agentAgg,
       cveId: cveIdAgg,
       cvssScore: cvssScoreTextAgg,
+      epssScore: epssScoreTextAgg,
+      epssPercentile: epssPercentileTextAgg,
+      epssUpdatedAt: epssUpdatedAtAgg,
       severity: severityAgg,
       sourceUrl: urlAgg,
       publishedAt: publishedAtAgg,
@@ -121,6 +127,9 @@ export async function GET(req: Request) {
       agent: r.agent,
       cveId: r.cveId ?? null,
       cvssScore: r.cvssScore ? String(r.cvssScore) : null,
+      epssScore: r.epssScore ? String(r.epssScore) : null,
+      epssPercentile: r.epssPercentile ? String(r.epssPercentile) : null,
+      epssUpdatedAt: r.epssUpdatedAt ? new Date(r.epssUpdatedAt).toISOString() : null,
       severity: r.severity,
       sourceUrl: r.sourceUrl ?? null,
       publishedAt: r.publishedAt ? new Date(r.publishedAt).toISOString() : null,

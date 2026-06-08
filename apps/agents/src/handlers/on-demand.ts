@@ -7,6 +7,7 @@ import { runAttackAgent } from "../agents/attack.js";
 import { runCustomAgents } from "../agents/custom.js";
 import { runDetectionsAgent } from "../agents/detections.js";
 import { runExploitAgent } from "../agents/exploit.js";
+import { runEpssEnrichAgent } from "../agents/epss-enrich.js";
 import { runMalwareAgent } from "../agents/malware.js";
 import { runMergeAgent } from "../agents/merge.js";
 import { runNavigatorAgent } from "../agents/navigator.js";
@@ -23,6 +24,7 @@ type SystemAgentKey =
   | "vuln"
   | "vuln-scanners"
   | "exploit"
+  | "epss-enrich"
   | "attack"
   | "ttp"
   | "malware"
@@ -56,6 +58,7 @@ function isSystemKey(key: string): key is SystemAgentKey {
     key === "vuln" ||
     key === "vuln-scanners" ||
     key === "exploit" ||
+    key === "epss-enrich" ||
     key === "attack" ||
     key === "ttp" ||
     key === "malware" ||
@@ -161,6 +164,7 @@ export const handler = async (event: OnDemandEventV1, _ctx: Context): Promise<vo
     if (agentKey === "vuln") await runVulnAgent();
     else if (agentKey === "vuln-scanners") await runVulnScannerSyncAgent({ connectionId: connectionId || null });
     else if (agentKey === "exploit") await runExploitAgent();
+    else if (agentKey === "epss-enrich") await runEpssEnrichAgent();
     else if (agentKey === "attack") await runAttackAgent();
     else if (agentKey === "ttp") await runTtpAgent();
     else if (agentKey === "malware") await runMalwareAgent();

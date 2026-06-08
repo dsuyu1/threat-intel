@@ -20,6 +20,7 @@ import { runActorProfileAgent } from "./agents/profile.js";
 import { runTtpAgent } from "./agents/ttp.js";
 import { runVulnAgent } from "./agents/vuln.js";
 import { runVulnScannerSyncAgent } from "./agents/vuln-scanners.js";
+import { runEpssEnrichAgent } from "./agents/epss-enrich.js";
 import { runDetectionsAgent } from "./agents/detections.js";
 import { runTheHiveSyncAgent } from "./agents/thehive.js";
 import { runCustomAgents } from "./agents/custom.js";
@@ -30,6 +31,7 @@ type SystemAgentKey =
   | "vuln"
   | "vuln-scanners"
   | "exploit"
+  | "epss-enrich"
   | "attack"
   | "ttp"
   | "malware"
@@ -99,6 +101,7 @@ function isSystemKey(k: string): k is SystemAgentKey {
     k === "vuln" ||
     k === "vuln-scanners" ||
     k === "exploit" ||
+    k === "epss-enrich" ||
     k === "attack" ||
     k === "ttp" ||
     k === "malware" ||
@@ -147,6 +150,7 @@ async function runSystemAgent(args: Args) {
     if (args.agentKey === "vuln") await runVulnAgent();
     else if (args.agentKey === "vuln-scanners") await runVulnScannerSyncAgent({ connectionId: args.connectionId });
     else if (args.agentKey === "exploit") await runExploitAgent();
+    else if (args.agentKey === "epss-enrich") await runEpssEnrichAgent();
     else if (args.agentKey === "attack") await runAttackAgent();
     else if (args.agentKey === "ttp") await runTtpAgent();
     else if (args.agentKey === "malware") await runMalwareAgent();

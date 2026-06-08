@@ -2,6 +2,7 @@ export type SystemAgentKey =
   | "vuln"
   | "vuln-scanners"
   | "exploit"
+  | "epss-enrich"
   | "attack"
   | "ttp"
   | "malware"
@@ -25,6 +26,7 @@ export const SYSTEM_AGENTS: SystemAgentMeta[] = [
   { key: "vuln", title: "CVE agent", short: "Fetches CVEs + KEV, summarizes, writes findings.", produces: "findings (agent=vuln)" },
   { key: "vuln-scanners", title: "Vulnerability scanner sync", short: "Pulls Tenable/Qualys/Rapid7 exposure and correlates host counts to CVEs.", produces: "vuln_scanner_* tables + CVE exposure" },
   { key: "exploit", title: "Exploit agent", short: "Tracks PoCs and time-to-exploit signals.", produces: "findings (agent=exploit)" },
+  { key: "epss-enrich", title: "EPSS enrichment", short: "Enriches CVE findings with EPSS probability + percentile (FIRST.org).", produces: "findings.epssScore/epssPercentile" },
   { key: "attack", title: "Threat feed agent", short: "Ingests RSS + runs AI extraction (actors, sectors, CVEs). Backfills ~30 days on first run.", produces: "documents + findings (agent=attack) + KG relations" },
   { key: "ttp", title: "TTP agent", short: "Syncs MITRE ATT&CK STIX (no AI): actors, techniques, mitigations, CVE refs.", produces: "knowledge graph (kg_entities/kg_relations)" },
   { key: "malware", title: "Malware agent", short: "Pulls new malware samples and metadata.", produces: "findings (agent=malware)" },

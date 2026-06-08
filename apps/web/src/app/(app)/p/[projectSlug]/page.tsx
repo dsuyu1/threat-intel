@@ -630,8 +630,9 @@ async function getDashboardData(params: { range: RangeId; projectId: string; use
   const severityMix = { critical: 0, high: 0, medium: 0, low: 0, info: 0, unscored: 0 };
   try {
     const timeExpr = sql<Date>`coalesce(${findings.publishedAt}, ${findings.createdAt})`;
+    const severityText = sql<string>`${findings.severity}::text`;
     const severityExpr = sql<string>`case
-      when ${findings.severity} is not null and btrim(${findings.severity}) <> '' then lower(${findings.severity})
+      when ${findings.severity} is not null and btrim(${severityText}) <> '' then lower(${severityText})
       when ${findings.cvssScore} is not null and ${findings.cvssScore} ~ '^[0-9]+([.][0-9]+)?$' then
         case
           when (${findings.cvssScore}::numeric) >= 9 then 'critical'

@@ -157,7 +157,11 @@ export async function getViewerContext(params?: { projectSlug?: string | null })
     clerkOrgId = (a as any).orgId ?? null;
   } catch (err) {
     authFailed = true;
-    if (isProduction) throw new Error("Clerk unavailable", { cause: err as any });
+    // NOTE (beta): If NAVIGATOR_PUBLIC_BETA is enabled, allow unauthenticated access in production.
+    // In that mode we treat Clerk failures as "signed out" instead of crashing the request.
+    if (isProduction && !allowLocalAuthFallback()) {
+      throw new Error("Clerk unavailable", { cause: err as any });
+    }
   }
 
   const shouldUseFallback = !clerkUserId && allowLocalAuthFallback();

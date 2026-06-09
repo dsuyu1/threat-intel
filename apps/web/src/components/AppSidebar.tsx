@@ -6,9 +6,8 @@ import clsx from "clsx";
 import { PLATFORM_NAV_SECTIONS } from "../lib/platform-nav";
 
 function isActivePath(pathname: string, href: string) {
-  if (pathname === href) return true;
-  if (href !== "/" && pathname.startsWith(`${href}/`)) return true;
-  return false;
+  const norm = (s: string) => (s.length > 1 ? s.replace(/\/+$/, "") : s);
+  return norm(pathname) === norm(href);
 }
 
 function parseProjectSlug(pathname: string) {
@@ -23,6 +22,8 @@ function projectizeHref(href: string, projectSlug: string | null) {
   if (href === "/navigator" || href.startsWith("/navigator/")) return `/p/${projectSlug}${href}`;
   if (href === "/iocs" || href.startsWith("/iocs/")) return `/p/${projectSlug}${href}`;
   if (href === "/risk" || href.startsWith("/risk/")) return `/p/${projectSlug}${href}`;
+  if (href === "/watchlist" || href.startsWith("/watchlist/")) return `/p/${projectSlug}${href}`;
+  if (href === "/compliance" || href.startsWith("/compliance/")) return `/p/${projectSlug}${href}`;
   if (href === "/playbooks" || href.startsWith("/playbooks/")) return `/p/${projectSlug}${href}`;
   if (href === "/sbom" || href.startsWith("/sbom/")) return `/p/${projectSlug}${href}`;
   if (href === "/tabletop" || href.startsWith("/tabletop/")) return `/p/${projectSlug}${href}`;

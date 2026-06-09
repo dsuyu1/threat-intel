@@ -303,7 +303,7 @@ export default async function NavigatorPage({
 
   if (!access) {
     return (
-      <div className="max-w-[90ch] mx-auto px-8 py-12">
+      <div className="max-w-[1600px] mx-auto px-8 py-12">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">Navigator</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Navigator is available on Pro.</p>
       </div>
@@ -666,7 +666,7 @@ export default async function NavigatorPage({
   };
 
   return (
-    <div className="max-w-[90ch] mx-auto px-8 py-10">
+    <div className="max-w-[1600px] mx-auto px-8 py-10">
       <div className="flex items-start justify-between gap-6">
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">Navigator</h1>

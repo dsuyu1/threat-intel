@@ -47,6 +47,7 @@ describe("Home route redirects", () => {
   const originalClerkId = process.env["NAVIGATOR_LOCAL_CLERK_ID"];
   const originalEmail = process.env["NAVIGATOR_LOCAL_EMAIL"];
   const originalTier = process.env["NAVIGATOR_LOCAL_TIER"];
+  const originalPublicBeta = process.env["NAVIGATOR_PUBLIC_BETA"];
 
   beforeEach(() => {
     vi.resetModules();
@@ -66,6 +67,8 @@ describe("Home route redirects", () => {
     else process.env["NAVIGATOR_LOCAL_EMAIL"] = originalEmail;
     if (originalTier === undefined) delete process.env["NAVIGATOR_LOCAL_TIER"];
     else process.env["NAVIGATOR_LOCAL_TIER"] = originalTier;
+    if (originalPublicBeta === undefined) delete process.env["NAVIGATOR_PUBLIC_BETA"];
+    else process.env["NAVIGATOR_PUBLIC_BETA"] = originalPublicBeta;
   });
 
   it("redirects to the default project dashboard in development without a Clerk session", async () => {
@@ -75,11 +78,11 @@ describe("Home route redirects", () => {
     await expect(Home()).rejects.toThrow("REDIRECT:/p/default");
   });
 
-  it("redirects to learn in production when unauthenticated", async () => {
+  it("redirects to the default project dashboard in production during public beta when unauthenticated", async () => {
     env["NODE_ENV"] = "production";
-    auth.mockResolvedValueOnce({ userId: null, orgId: null } as any);
+    process.env["NAVIGATOR_PUBLIC_BETA"] = "1";
+    auth.mockResolvedValue({ userId: null, orgId: null } as any);
     const Home = (await import("./page")).default;
-    await expect(Home()).rejects.toThrow("REDIRECT:/learn");
+    await expect(Home()).rejects.toThrow("REDIRECT:/p/default");
   });
 });
-

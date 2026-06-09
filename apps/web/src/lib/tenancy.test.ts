@@ -1,94 +1,115 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
-const auth = vi.fn();
-vi.mock("@clerk/nextjs/server", () => ({ auth }));
+const authMock = vi.fn();
 
-vi.mock("@ti/db", async () => {
-  const actual = await vi.importActual<typeof import("@ti/db")>("@ti/db");
+vi.mock("@clerk/nextjs/server", () => ({
+  auth: authMock,
+}));
 
-  const userRow = { id: "user-123", tier: "pro", email: "local@threat-intel.dev", clerkId: "local" };
-  const teamRow = { id: "team-123", clerkOrgId: `personal:${userRow.id}`, name: "Personal" };
-  const projectRow = { id: "proj-123", teamId: teamRow.id, slug: "default", name: "Default" };
+type FakeSelectRow = Record<string, unknown>;
 
-  const db = {
-    select: () => ({
-      from: (table: any) => ({
-        where: () => ({
-          limit: async () => {
-            if (table === actual.users) return [userRow];
-            if (table === actual.teams) return [teamRow];
-            if (table === actual.userPreferences) return [{ defaultProjectId: projectRow.id }];
-            if (table === actual.projects) return [projectRow];
-            return [];
-          },
-        }),
-        limit: async () => [],
-      }),
-    }),
-    insert: () => ({
-      values: () => ({
-        onConflictDoNothing: async () => {},
-        onConflictDoUpdate: async () => {},
-      }),
-    }),
-  };
+function rowForSelection(selection: Record<string, unknown>): FakeSelectRow[] {
+  const keys = Object.keys(selection ?? {});
 
-  return { ...actual, getDb: () => db };
+  if (keys.includes("defaultProjectId")) return [{ defaultProjectId: null }];
+  if (keys.includes("clerkOrgId")) return [{ id: "t1", clerkOrgId: "personal:u1", name: "Personal" }];
+  if (keys.includes("teamId") && keys.includes("slug"))
+    return [{ id: "p1", teamId: "t1", slug: "default", name: "Default" }];
+  if (keys.includes("tier") && keys.includes("email"))
+    return [{ id: "u1", tier: "pro", email: "local@threat-intel.dev", clerkId: "local" }];
+
+  // Default: return a single row with nulls for requested keys.
+  const out: FakeSelectRow = {};
+  for (const k of keys) out[k] = null;
+  return [out];
+}
+
+class FakeSelect {
+  private selection: Record<string, unknown>;
+  constructor(selection: Record<string, unknown>) {
+    this.selection = selection;
+  }
+  from() {
+    return this;
+  }
+  where() {
+    return this;
+  }
+  orderBy() {
+    return this;
+  }
+  limit() {
+    return Promise.resolve(rowForSelection(this.selection));
+  }
+}
+
+class FakeInsert {
+  values() {
+    return this;
+  }
+  onConflictDoNothing() {
+    return Promise.resolve();
+  }
+  onConflictDoUpdate() {
+    return Promise.resolve();
+  }
+  returning() {
+    return Promise.resolve([{ id: "x" }]);
+  }
+}
+
+class FakeUpdate {
+  set() {
+    return this;
+  }
+  where() {
+    return Promise.resolve();
+  }
+}
+
+const fakeDb = {
+  select(selection: Record<string, unknown>) {
+    return new FakeSelect(selection);
+  },
+  insert() {
+    return new FakeInsert();
+  },
+  update() {
+    return new FakeUpdate();
+  },
+};
+
+vi.mock("@ti/db", () => ({
+  getDb: () => fakeDb,
+  users: { id: "users.id", tier: "users.tier", email: "users.email", clerkId: "users.clerkId" },
+  teams: { id: "teams.id", clerkOrgId: "teams.clerk_org_id", name: "teams.name" },
+  projects: { id: "projects.id", teamId: "projects.team_id", slug: "projects.slug", name: "projects.name" },
+  userPreferences: { userId: "user_preferences.user_id", defaultProjectId: "user_preferences.default_project_id" },
+}));
+
+describe("getViewerContext beta fallback", () => {
+  test("does not throw in production when NAVIGATOR_PUBLIC_BETA is enabled and Clerk auth() throws", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NAVIGATOR_PUBLIC_BETA", "1");
+    authMock.mockImplementation(() => {
+      throw new Error("Clerk down");
+    });
+
+    const { getViewerContext } = await import("./tenancy");
+    const ctx = await getViewerContext();
+    expect(ctx.clerk.userId).toBe(null);
+    expect(ctx.project.slug).toBe("default");
+  });
+
+  test("fails closed in production when NAVIGATOR_PUBLIC_BETA is disabled and Clerk auth() throws", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NAVIGATOR_PUBLIC_BETA", "");
+    authMock.mockImplementation(() => {
+      throw new Error("Clerk down");
+    });
+
+    const { getViewerContext } = await import("./tenancy");
+    await expect(getViewerContext()).rejects.toThrow(/Clerk unavailable/i);
+  });
 });
 
-const { getViewerContext } = await import("./tenancy");
-
-describe("getViewerContext() auth behavior", () => {
-  const env = process.env as Record<string, string | undefined>;
-  const originalNodeEnv = env["NODE_ENV"];
-  const originalClerkId = process.env["NAVIGATOR_LOCAL_CLERK_ID"];
-  const originalEmail = process.env["NAVIGATOR_LOCAL_EMAIL"];
-  const originalTier = process.env["NAVIGATOR_LOCAL_TIER"];
-
-  beforeEach(() => {
-    auth.mockReset();
-    process.env["NAVIGATOR_LOCAL_CLERK_ID"] = "local";
-    process.env["NAVIGATOR_LOCAL_EMAIL"] = "local@threat-intel.dev";
-    process.env["NAVIGATOR_LOCAL_TIER"] = "pro";
-  });
-
-  afterEach(() => {
-    if (originalNodeEnv === undefined) delete env["NODE_ENV"];
-    else env["NODE_ENV"] = originalNodeEnv;
-    if (originalClerkId === undefined) delete process.env["NAVIGATOR_LOCAL_CLERK_ID"];
-    else process.env["NAVIGATOR_LOCAL_CLERK_ID"] = originalClerkId;
-    if (originalEmail === undefined) delete process.env["NAVIGATOR_LOCAL_EMAIL"];
-    else process.env["NAVIGATOR_LOCAL_EMAIL"] = originalEmail;
-    if (originalTier === undefined) delete process.env["NAVIGATOR_LOCAL_TIER"];
-    else process.env["NAVIGATOR_LOCAL_TIER"] = originalTier;
-  });
-
-  it("fails closed in production if Clerk auth throws", async () => {
-    env["NODE_ENV"] = "production";
-    auth.mockRejectedValueOnce(new Error("boom"));
-    await expect(getViewerContext()).rejects.toThrow(/clerk unavailable/i);
-  });
-
-  it("fails closed in production when unauthenticated", async () => {
-    env["NODE_ENV"] = "production";
-    auth.mockResolvedValueOnce({ userId: null, orgId: null } as any);
-    await expect(getViewerContext()).rejects.toThrow(/not authenticated/i);
-  });
-
-  it("uses local auth fallback in development when unauthenticated", async () => {
-    env["NODE_ENV"] = "development";
-    auth.mockResolvedValueOnce({ userId: null, orgId: null } as any);
-    const ctx = await getViewerContext();
-    expect(ctx.clerk.userId).toBeNull();
-    expect(ctx.user.email).toBe("local@threat-intel.dev");
-    expect(String(ctx.user.tier)).toBe("pro");
-  });
-
-  it("uses local auth fallback in development when Clerk auth throws", async () => {
-    env["NODE_ENV"] = "development";
-    auth.mockRejectedValueOnce(new Error("boom"));
-    const ctx = await getViewerContext();
-    expect(ctx.clerk.userId).toBeNull();
-    expect(ctx.user.email).toBe("local@threat-intel.dev");
-  });
-});

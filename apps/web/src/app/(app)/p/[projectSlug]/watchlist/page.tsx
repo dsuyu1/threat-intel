@@ -71,7 +71,7 @@ export default async function WatchlistPage({ params }: { params: Promise<{ proj
   } catch (err) {
     if (isMissingTable(err)) {
       return (
-        <div className="mx-auto max-w-[1100px] px-8 py-10">
+        <div className="mx-auto max-w-[1600px] px-8 py-10">
           <Card>
             <CardHeader
               title="Database not migrated"
@@ -191,9 +191,8 @@ export default async function WatchlistPage({ params }: { params: Promise<{ proj
   });
 
   return (
-    <div className="mx-auto max-w-[1100px] px-8 py-10">
+    <div className="mx-auto max-w-[1600px] px-8 py-10">
       <WatchlistManager projectSlug={p.projectSlug} rows={rows} connections={connections} />
     </div>
   );
 }
-

@@ -42,7 +42,7 @@ export default async function SbomDetailPage({
   const access = hasNavigatorAccess({ tier: ctx.user.tier });
   if (!access) {
     return (
-      <div className="max-w-[90ch] mx-auto px-8 py-12">
+      <div className="max-w-[1600px] mx-auto px-8 py-12">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">SBOM</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">SBOM correlation is available on Pro.</p>
       </div>
@@ -86,7 +86,7 @@ export default async function SbomDetailPage({
       const showDbSummary = process.env.NODE_ENV !== "production";
 
       return (
-        <div className="max-w-[90ch] mx-auto px-8 py-12">
+        <div className="max-w-[1600px] mx-auto px-8 py-12">
           <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">Database not migrated</h1>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
             The SBOM tables don&rsquo;t exist in your current DATABASE_URL. Run <span className="font-mono">pnpm db:migrate</span> and refresh.
@@ -116,7 +116,7 @@ export default async function SbomDetailPage({
 
   if (!row) {
     return (
-      <div className="max-w-[90ch] mx-auto px-8 py-12">
+      <div className="max-w-[1600px] mx-auto px-8 py-12">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">SBOM not found</h1>
         <Link href={`/p/${p.projectSlug}/sbom`} className="mt-2 inline-block text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
           Back to SBOMs
@@ -171,7 +171,7 @@ export default async function SbomDetailPage({
     .sort((a, b) => b.activeCves.length - a.activeCves.length || (b.bestCvss ?? 0) - (a.bestCvss ?? 0));
 
   return (
-    <div className="max-w-[1100px] mx-auto px-6 py-10 space-y-6">
+    <div className="max-w-[1600px] mx-auto px-6 py-10 space-y-6">
       <div className="flex items-center justify-between gap-4">
         <Link href={`/p/${p.projectSlug}/sbom`} className="text-sm text-zinc-600 dark:text-zinc-400 hover:underline">
           ← SBOMs

@@ -69,7 +69,7 @@ export default async function PlaybookPage({
 
   if (missing) {
     return (
-      <div className="mx-auto max-w-[90ch] px-8 py-10 space-y-4">
+      <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 py-10 space-y-4">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">Playbooks</h1>
         <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
           Playbooks tables are missing. Run <span className="font-mono">pnpm db:migrate</span>.
@@ -83,7 +83,7 @@ export default async function PlaybookPage({
 
   if (!row) {
     return (
-      <div className="mx-auto max-w-[90ch] px-8 py-10 space-y-4">
+      <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 py-10 space-y-4">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">Playbook not found</h1>
         <Link href={`/p/${p.projectSlug}/playbooks`} className="text-sm text-zinc-600 dark:text-zinc-400 hover:underline">
           ← Back to playbooks
@@ -100,7 +100,7 @@ export default async function PlaybookPage({
       : JSON.stringify(row.contentJson, null, 2);
 
   return (
-    <div className="mx-auto max-w-[1100px] px-8 py-10 space-y-6">
+    <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 py-10 space-y-6">
       <header className="space-y-3">
         <Link href={`/p/${p.projectSlug}/playbooks`} className="text-sm text-zinc-600 dark:text-zinc-400 hover:underline">
           ← Back to playbooks

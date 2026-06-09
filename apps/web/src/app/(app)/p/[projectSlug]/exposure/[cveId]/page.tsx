@@ -32,7 +32,7 @@ export default async function ExposurePage({
   const access = hasNavigatorAccess({ tier: ctx.user.tier });
   if (!access) {
     return (
-      <div className="max-w-[90ch] mx-auto px-8 py-12">
+      <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 py-12">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">Exposure</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Scanner exposure is available on Pro.</p>
       </div>
@@ -43,7 +43,7 @@ export default async function ExposurePage({
   if (!cveId) notFound();
 
   const missingTablesCard = (
-    <div className="mx-auto max-w-[1100px] px-8 py-10">
+    <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 py-10">
       <Card>
         <CardHeader title="Database not migrated" description="The vuln scanner tables don't exist yet." />
         <CardContent>
@@ -79,7 +79,7 @@ export default async function ExposurePage({
 
   if (!connection) {
     return (
-      <div className="mx-auto max-w-[1100px] px-8 py-10 space-y-6">
+      <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 py-10 space-y-6">
         <div className="flex items-center justify-between gap-4">
           <Link href={`/p/${p.projectSlug}/risk`} className="text-sm text-zinc-600 dark:text-zinc-400 hover:underline">
             ← Risk register
@@ -165,7 +165,7 @@ export default async function ExposurePage({
   }
 
   return (
-    <div className="mx-auto max-w-[1100px] px-8 py-10 space-y-6">
+    <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 py-10 space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <Link href={`/p/${p.projectSlug}/risk`} className="text-sm text-zinc-600 dark:text-zinc-400 hover:underline">
           ← Risk register

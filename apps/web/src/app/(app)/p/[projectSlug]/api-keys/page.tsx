@@ -18,7 +18,7 @@ export default async function ApiKeysPage({
   const access = hasNavigatorAccess({ tier: ctx.user.tier });
   if (!access) {
     return (
-      <div className="max-w-[90ch] mx-auto px-8 py-12">
+      <div className="max-w-[1600px] mx-auto px-8 py-12">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">API keys</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Enterprise API access is available on Pro.</p>
       </div>
@@ -26,7 +26,7 @@ export default async function ApiKeysPage({
   }
 
   return (
-    <div className="max-w-[1100px] mx-auto px-6 py-10 space-y-6">
+    <div className="max-w-[1600px] mx-auto px-6 py-10 space-y-6">
       <div className="flex items-center justify-between gap-4">
         <Link
           href={`/p/${p.projectSlug}`}
@@ -57,4 +57,3 @@ export default async function ApiKeysPage({
     </div>
   );
 }
-

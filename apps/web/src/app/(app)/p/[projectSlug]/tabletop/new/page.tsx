@@ -13,7 +13,7 @@ export default async function NewTabletopPage({ params }: { params: Promise<{ pr
 
   if (!access) {
     return (
-      <div className="max-w-[90ch] mx-auto px-8 py-12">
+      <div className="max-w-[1600px] mx-auto px-8 py-12">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">New tabletop exercise</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Tabletop exercises are available on Pro.</p>
       </div>
@@ -21,7 +21,7 @@ export default async function NewTabletopPage({ params }: { params: Promise<{ pr
   }
 
   return (
-    <div className="mx-auto max-w-[1100px] px-8 py-10 space-y-6">
+    <div className="mx-auto max-w-[1600px] px-8 py-10 space-y-6">
       <header className="space-y-2">
         <Link href={`/p/${p.projectSlug}/tabletop`} className="text-sm text-zinc-600 dark:text-zinc-400 hover:underline">
           ← Back to tabletop

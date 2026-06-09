@@ -67,7 +67,7 @@ export default async function NewPlaybookPage({
   });
 
   return (
-    <div className="mx-auto max-w-[1100px] px-8 py-10 space-y-6">
+    <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 py-10 space-y-6">
       <header className="space-y-2">
         <Link href={`/p/${p.projectSlug}/playbooks`} className="text-sm text-zinc-600 dark:text-zinc-400 hover:underline">
           ← Back to playbooks
@@ -110,4 +110,3 @@ export default async function NewPlaybookPage({
     </div>
   );
 }
-

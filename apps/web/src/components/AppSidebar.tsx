@@ -5,9 +5,30 @@ import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import { PLATFORM_NAV_SECTIONS } from "../lib/platform-nav";
 
-function isActivePath(pathname: string, href: string) {
-  const norm = (s: string) => (s.length > 1 ? s.replace(/\/+$/, "") : s);
-  return norm(pathname) === norm(href);
+function normalizePath(s: string) {
+  return s.length > 1 ? s.replace(/\/+$/, "") : s;
+}
+
+function isPrefixOrExactMatch(pathname: string, href: string) {
+  const p = normalizePath(pathname);
+  const h = normalizePath(href);
+  return p === h || p.startsWith(`${h}/`);
+}
+
+function findBestActiveHref(pathname: string, hrefs: string[]) {
+  const p = normalizePath(pathname);
+
+  let best: { href: string; normHref: string } | null = null;
+  for (const href of hrefs) {
+    const h = normalizePath(href);
+    if (p === h || p.startsWith(`${h}/`)) {
+      if (!best || h.length > best.normHref.length) {
+        best = { href, normHref: h };
+      }
+    }
+  }
+
+  return best?.href ?? null;
 }
 
 function parseProjectSlug(pathname: string) {
@@ -36,6 +57,10 @@ function projectizeHref(href: string, projectSlug: string | null) {
 export function AppSidebar() {
   const pathname = usePathname();
   const projectSlug = parseProjectSlug(pathname);
+  const allHrefs = PLATFORM_NAV_SECTIONS.flatMap((section) =>
+    section.items.map((item) => projectizeHref(item.href, projectSlug))
+  );
+  const activeHref = findBestActiveHref(pathname, allHrefs);
 
   return (
     <div className="flex flex-col gap-6">
@@ -49,7 +74,10 @@ export function AppSidebar() {
           <nav className="flex flex-col gap-1">
             {section.items.map((item) => {
               const href = projectizeHref(item.href, projectSlug);
-              const active = isActivePath(pathname, href);
+              const active =
+                !!activeHref &&
+                normalizePath(href) === normalizePath(activeHref) &&
+                isPrefixOrExactMatch(pathname, href);
               const Icon = item.icon;
 
               return (

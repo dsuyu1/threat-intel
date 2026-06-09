@@ -222,14 +222,7 @@ function getTechniqueTacticsFromKillChainPhases(phases: unknown): { slugs: strin
   return { slugs, labels };
 }
 
-const D3FEND_MAPPING_URLS = [
-  "https://d3fend.mitre.org/api/mappings/attack-mitigations.json",
-  "https://d3fend.mitre.org/api/mappings/attack-mitigations.csv",
-  "https://raw.githubusercontent.com/d3fend/d3fend/gh-pages/api/mappings/attack-mitigations.json",
-  "https://raw.githubusercontent.com/d3fend/d3fend/gh-pages/api/mappings/attack-mitigations.csv",
-  "https://d3fend.mitre.org/mappings/attack-mitigations/",
-] as const;
-
+const D3FEND_OFFENSIVE_TECHNIQUE_URL_PREFIX = "https://d3fend.mitre.org/api/offensive-technique/attack/";
 const D3FEND_TECHNIQUES_CSV_URL = "https://d3fend.mitre.org/ontologies/d3fend.csv";
 
 type D3fendTechniqueMeta = {
@@ -313,6 +306,7 @@ const STIX_MITIGATION_ID_RE =
   /\bcourse-of-action--[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
 const D3FEND_LEGACY_ID_RE = /\bD3-[A-Z0-9]{2,}\b/g;
 const D3FEND_PREFIX_ID_RE = /\bd3f:[A-Za-z0-9_-]+\b/gi;
+const D3FEND_NS_ID_RE = /\bd3fend:[A-Za-z0-9_-]+\b/gi;
 const D3FEND_OWL_ID_RE = /d3fend\.owl#[A-Za-z0-9_-]+/gi;
 
 function normalizeD3fendId(value: string): string | null {
@@ -323,6 +317,9 @@ function normalizeD3fendId(value: string): string | null {
 
   const pref = v.match(/^d3f:([A-Za-z0-9_-]+)$/i);
   if (pref?.[1]) return `d3f:${pref[1]}`;
+
+  const ns = v.match(/^d3fend:([A-Za-z0-9_-]+)$/i);
+  if (ns?.[1]) return `d3f:${ns[1]}`;
 
   const owl = v.match(/d3fend\.owl#([A-Za-z0-9_-]+)$/i);
   if (owl?.[1]) return `d3f:${owl[1]}`;
@@ -349,6 +346,7 @@ function extractD3fendIds(raw: string): string[] {
 
   for (const m of raw.match(D3FEND_LEGACY_ID_RE) ?? []) push(m);
   for (const m of raw.match(D3FEND_PREFIX_ID_RE) ?? []) push(m);
+  for (const m of raw.match(D3FEND_NS_ID_RE) ?? []) push(m);
   for (const m of raw.match(D3FEND_OWL_ID_RE) ?? []) push(m);
 
   return out;
@@ -465,6 +463,40 @@ export function parseD3fendMitigationMappings(payload: string): Array<{ mitigati
   return out;
 }
 
+type D3fendSparqlValue = { value?: string };
+type D3fendSparqlBinding = Record<string, D3fendSparqlValue | undefined>;
+
+function sparqlValue(binding: unknown, key: string): string | null {
+  if (!binding || typeof binding !== "object") return null;
+  const v = (binding as D3fendSparqlBinding)[key]?.value;
+  return typeof v === "string" ? v : null;
+}
+
+function parseD3fendOffensiveTechniqueMappings(payload: unknown): Array<{ id: string; name: string | null; category: string | null }> {
+  const bindings =
+    ((payload as any)?.off_to_def?.results?.bindings as unknown) ??
+    ((payload as any)?.def_to_off?.results?.bindings as unknown);
+  if (!Array.isArray(bindings)) return [];
+
+  const byId = new Map<string, { id: string; name: string | null; category: string | null }>();
+  for (const b of bindings) {
+    const rawId =
+      sparqlValue(b, "def_tech_id") ??
+      sparqlValue(b, "def_tech") ??
+      sparqlValue(b, "def_tech_parent") ??
+      sparqlValue(b, "def_technique") ??
+      null;
+    const id = rawId ? normalizeD3fendId(rawId) : null;
+    if (!id) continue;
+    if (byId.has(id)) continue;
+    const name = sparqlValue(b, "def_tech_label")?.trim() ?? null;
+    const category = sparqlValue(b, "def_tactic_label")?.trim() ?? null;
+    byId.set(id, { id, name, category });
+  }
+
+  return Array.from(byId.values());
+}
+
 async function fetchText(url: string): Promise<string> {
   const res = await fetch(url, {
     headers: { "User-Agent": MITRE_UA, Accept: "text/html" },
@@ -510,96 +542,98 @@ async function fetchFirstOkText(urls: readonly string[]): Promise<{ url: string;
 }
 
 async function syncD3fendMappings(now: Date, sourceId: string) {
-  console.log("[TtpAgent] Syncing D3FEND attack-mitigation mappings...");
+  console.log("[TtpAgent] Syncing D3FEND technique mappings (ATT&CK techniques → D3FEND)...");
 
-  const [csvRes, mappingRes] = await Promise.all([
-    fetchFirstOkText([D3FEND_TECHNIQUES_CSV_URL]),
-    fetchFirstOkText(D3FEND_MAPPING_URLS),
-  ]);
-
+  const csvRes = await fetchFirstOkText([D3FEND_TECHNIQUES_CSV_URL]);
   const metaById = parseD3fendTechniquesCsv(csvRes.text);
-  const mappings = parseD3fendMitigationMappings(mappingRes.text);
-
-  if (!mappings.length) {
-    const text = mappingRes.text ?? "";
-    const mitreCount = (text.match(MITRE_MITIGATION_ID_RE) ?? []).length;
-    const stixCount = (text.match(STIX_MITIGATION_ID_RE) ?? []).length;
-    const d3Legacy = (text.match(D3FEND_LEGACY_ID_RE) ?? []).length;
-    const d3Pref = (text.match(D3FEND_PREFIX_ID_RE) ?? []).length;
-    const d3Owl = (text.match(D3FEND_OWL_ID_RE) ?? []).length;
-    console.warn(
-      `[TtpAgent] D3FEND mapping parse produced 0 rows. Source: ${mappingRes.url} | M: ${mitreCount} | COA: ${stixCount} | D3-: ${d3Legacy} | d3f:: ${d3Pref} | owl#: ${d3Owl}`
-    );
-    console.warn(`[TtpAgent] D3FEND mapping response head: ${text.slice(0, 400)}`);
-  }
 
   const db = getDb();
-  const mitigationStixRows = await db
-    .select({
-      mitigationId: kgEntities.entityId,
-      stixId: sql<string>`(${kgEntities.attributes} ->> 'stixId')`,
-    })
+  const techniqueRows = await db
+    .select({ techniqueId: kgEntities.entityId })
     .from(kgEntities)
-    .where(eq(kgEntities.kind, "mitigation"))
-    .limit(5000);
+    .where(eq(kgEntities.kind, "technique"))
+    .limit(6000);
 
-  const mitigationIdByStix = new Map<string, string>();
-  for (const r of mitigationStixRows) {
-    const stixId = String(r.stixId ?? "").trim();
-    if (!stixId) continue;
-    mitigationIdByStix.set(stixId, String(r.mitigationId));
+  const techniqueIds = techniqueRows
+    .map((r) => String(r.techniqueId ?? "").trim())
+    .filter(Boolean);
+
+  if (!techniqueIds.length) {
+    console.warn("[TtpAgent] No ATT&CK techniques found in DB; run STIX sync first.");
+    return;
   }
 
   const entityById = new Map<string, EntityRow>();
   const relationByKey = new Map<string, RelationRow>();
 
-  for (const m of mappings) {
-    const mitId =
-      /^M\d{4}$/i.test(m.mitigationId)
-        ? m.mitigationId.toUpperCase()
-        : m.mitigationId.startsWith("course-of-action--")
-          ? mitigationIdByStix.get(m.mitigationId) ?? null
-          : null;
-    if (!mitId) continue;
+  const concurrency = Math.max(1, Math.min(10, Number(process.env["TTP_D3FEND_CONCURRENCY"] ?? 6)));
+  let fetchedOk = 0;
+  let notFound = 0;
+  let fetchErrors = 0;
+  let mappedTechniques = 0;
 
-    for (const d3id of m.d3fendIds) {
-      const meta = metaById.get(d3id) ?? null;
-      if (!entityById.has(d3id)) {
-        entityById.set(d3id, {
-          kind: "d3fend_technique",
-          entityId: d3id,
-          name: meta?.name ?? d3id,
-          aliases: null,
-          description: meta?.description ?? null,
-          attributes: {
-            source: "mitre-d3fend",
-            url: meta?.url ?? `https://d3fend.mitre.org/search/?q=${encodeURIComponent(d3id)}`,
-            category: meta?.category ?? null,
-          },
+  await mapLimit(techniqueIds, concurrency, async (techniqueId) => {
+    const url = `${D3FEND_OFFENSIVE_TECHNIQUE_URL_PREFIX}${encodeURIComponent(techniqueId)}.json`;
+    try {
+      const res = await fetch(url, {
+        headers: { "User-Agent": MITRE_UA, Accept: "application/json" },
+      });
+      if (res.status === 404) {
+        notFound += 1;
+        return;
+      }
+      if (!res.ok) throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
+
+      const json = (await res.json().catch(() => null)) as unknown;
+      fetchedOk += 1;
+
+      const defs = parseD3fendOffensiveTechniqueMappings(json);
+      if (!defs.length) return;
+      mappedTechniques += 1;
+
+      for (const def of defs) {
+        const d3id = def.id;
+        const meta = metaById.get(d3id) ?? null;
+        if (!entityById.has(d3id)) {
+          entityById.set(d3id, {
+            kind: "d3fend_technique",
+            entityId: d3id,
+            name: meta?.name ?? def.name ?? d3id,
+            aliases: null,
+            description: meta?.description ?? null,
+            attributes: {
+              source: "mitre-d3fend",
+              url: meta?.url ?? `https://d3fend.mitre.org/search/?q=${encodeURIComponent(d3id)}`,
+              category: meta?.category ?? def.category ?? null,
+            },
+          });
+        }
+
+        const key = `technique_mapped_to_d3fend||${techniqueId}||${d3id}`;
+        relationByKey.set(key, {
+          type: "technique_mapped_to_d3fend",
+          fromKind: "technique",
+          fromId: techniqueId,
+          toKind: "d3fend_technique",
+          toId: d3id,
+          support: 1,
+          confidence: 1,
+          firstSeen: now,
+          lastSeen: now,
+          attributes: { source: "mitre-d3fend", mapping: "offensive-technique", sourceId },
         });
       }
-
-      const key = `mitigation_mapped_to_d3fend||${mitId}||${d3id}`;
-      relationByKey.set(key, {
-        type: "mitigation_mapped_to_d3fend",
-        fromKind: "mitigation",
-        fromId: mitId,
-        toKind: "d3fend_technique",
-        toId: d3id,
-        support: 1,
-        confidence: 1,
-        firstSeen: now,
-        lastSeen: now,
-        attributes: { source: "mitre-d3fend", mapping: "attack-mitigations", sourceId },
-      });
+    } catch (err) {
+      fetchErrors += 1;
+      if (fetchErrors <= 5) console.warn("[TtpAgent] D3FEND mapping fetch failed:", techniqueId, err);
     }
-  }
+  });
 
   await upsertEntities(Array.from(entityById.values()), now);
   await upsertRelations(Array.from(relationByKey.values()));
 
   console.log(
-    `[TtpAgent] D3FEND sync done. Techniques: ${entityById.size} | Mappings: ${relationByKey.size} (source: ${mappingRes.url})`
+    `[TtpAgent] D3FEND sync done. Techniques: ${entityById.size} | Mappings: ${relationByKey.size} (fetched: ${fetchedOk}/${techniqueIds.length} | mapped: ${mappedTechniques} | 404: ${notFound} | errors: ${fetchErrors})`
   );
 }
 

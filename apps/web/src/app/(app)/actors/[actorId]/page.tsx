@@ -490,7 +490,7 @@ export default async function ActorPage({
     : null;
 
   return (
-    <div className="max-w-[1440px] mx-auto px-6 md:px-10 py-10">
+      <div className="max-w-[1600px] mx-auto px-6 md:px-10 py-10">
       <header className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link

@@ -909,7 +909,7 @@ export function FindingsDashboard({
     chips.length > 0 || sortKey !== "date" || sortDir !== "desc" || limit !== 25 || page !== 1;
 
   return (
-    <div className="mx-auto max-w-[1440px] px-6 sm:px-8 py-10 space-y-6">
+      <div className="mx-auto max-w-[1600px] px-6 sm:px-8 py-10 space-y-6">
       <header className="space-y-2">
         <div className="flex items-start justify-between gap-4">
           <div>

@@ -34,7 +34,7 @@ export default async function DefendPage({
 
   if (!access) {
     return (
-      <div className="max-w-[90ch] mx-auto px-8 py-12">
+      <div className="mx-auto max-w-[1600px] px-8 py-12">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">MITRE matrix map</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">MITRE matrix map is available on Pro.</p>
       </div>
@@ -43,16 +43,24 @@ export default async function DefendPage({
 
   const days = parseDays(pickOne(sp.days), 90);
   const db = getDb();
-  const columns = await buildDefendHeatmapColumns({ db, days });
+  const heatmap = await buildDefendHeatmapColumns({ db, days });
+  const columns = heatmap.columns;
+  const heatBy = heatmap.heatBy;
   const hasAnyTechniques = columns.some((c) => c.items.length > 0);
+  const heatLabel =
+    heatBy === "mentions"
+      ? `findings mentions in the last ${days} days`
+      : heatBy === "actors"
+        ? "ATT&CK actor prevalence"
+        : "D3FEND coverage";
 
   return (
-    <div className="max-w-[90ch] mx-auto px-8 py-10">
+    <div className="mx-auto max-w-[1600px] px-8 py-10">
       <div>
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">MITRE matrix map</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          ATT&CK Enterprise technique heatmap scored by findings mentions. Click a technique to see ATT&CK mitigations
-          and mapped D3FEND countermeasures.
+          ATT&CK Enterprise technique heatmap colored by {heatLabel}. Click a technique to see ATT&CK mitigations and
+          mapped D3FEND countermeasures.
         </p>
       </div>
 
@@ -65,7 +73,7 @@ export default async function DefendPage({
         </div>
       ) : null}
 
-      <DefendHeatmap projectSlug={p.projectSlug} days={days} columns={columns} />
+      <DefendHeatmap projectSlug={p.projectSlug} days={days} columns={columns} heatBy={heatBy} />
     </div>
   );
 }

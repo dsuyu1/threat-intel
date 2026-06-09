@@ -40,16 +40,18 @@ type DrilldownResponse = {
 function bucketClass(bucket: number) {
   const b = Math.max(0, Math.min(5, Math.floor(bucket)));
   if (b === 0)
-    return "border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-black/20 hover:bg-white/70 dark:hover:bg-black/30";
+    return "border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-black/20 hover:bg-zinc-50/80 dark:hover:bg-black/30";
+
+  // Use a single “globe-like” red heat ramp with higher contrast than the default pastels.
   if (b === 1)
-    return "border-emerald-200/80 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/20 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/30";
+    return "border-red-300/80 dark:border-red-900/70 bg-red-50/90 dark:bg-red-950/25 hover:bg-red-100/90 dark:hover:bg-red-950/35";
   if (b === 2)
-    return "border-sky-200/80 dark:border-sky-900/60 bg-sky-50/60 dark:bg-sky-950/20 hover:bg-sky-50/80 dark:hover:bg-sky-950/30";
+    return "border-red-400/80 dark:border-red-800/70 bg-red-100/90 dark:bg-red-950/35 hover:bg-red-200/90 dark:hover:bg-red-950/45";
   if (b === 3)
-    return "border-amber-200/80 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20 hover:bg-amber-50/80 dark:hover:bg-amber-950/30";
+    return "border-red-500/80 dark:border-red-700/70 bg-red-200/90 dark:bg-red-950/45 hover:bg-red-300/90 dark:hover:bg-red-950/55";
   if (b === 4)
-    return "border-orange-200/80 dark:border-orange-900/60 bg-orange-50/60 dark:bg-orange-950/20 hover:bg-orange-50/80 dark:hover:bg-orange-950/30";
-  return "border-rose-200/80 dark:border-rose-900/60 bg-rose-50/60 dark:bg-rose-950/20 hover:bg-rose-50/80 dark:hover:bg-rose-950/30";
+    return "border-red-600/85 dark:border-red-600/75 bg-red-300/90 dark:bg-red-900/45 hover:bg-red-400/90 dark:hover:bg-red-900/55";
+  return "border-red-700/90 dark:border-red-500/80 bg-red-400/90 dark:bg-red-800/45 hover:bg-red-500/90 dark:hover:bg-red-800/55";
 }
 
 function nf(value: number) {
@@ -84,10 +86,12 @@ export function DefendHeatmap({
   projectSlug,
   days,
   columns,
+  heatBy,
 }: {
   projectSlug: string;
   days: number;
   columns: TacticColumn[];
+  heatBy: "mentions" | "actors" | "d3fend";
 }) {
   const [selectedId, setSelectedId] = useState<string>("");
   const [expanded, setExpanded] = useState(false);
@@ -135,6 +139,33 @@ export function DefendHeatmap({
     () => columns.some((c) => c.items.some((it) => (it.d3fendCount ?? 0) > 0)),
     [columns]
   );
+
+  const hasAnyMentions = useMemo(() => {
+    for (const c of columns) {
+      for (const it of c.items) {
+        if ((it.mentions90d ?? 0) > 0) return true;
+        for (const s of it.subtechniques ?? []) if ((s.mentions90d ?? 0) > 0) return true;
+      }
+    }
+    return false;
+  }, [columns]);
+
+  const hasAnyHeat = useMemo(() => {
+    for (const c of columns) {
+      for (const it of c.items) {
+        if ((it.bucket ?? 0) > 0) return true;
+        for (const s of it.subtechniques ?? []) if ((s.bucket ?? 0) > 0) return true;
+      }
+    }
+    return false;
+  }, [columns]);
+
+  const heatLabel =
+    heatBy === "mentions"
+      ? `mentions in the last ${nf(days)} days`
+      : heatBy === "actors"
+        ? "ATT&CK actor prevalence"
+        : "D3FEND coverage";
 
   useEffect(() => {
     if (!selectedId) return;
@@ -225,14 +256,19 @@ export function DefendHeatmap({
                 MITRE matrix map
               </h2>
               <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                Techniques are colored by mentions in the last <span className="tabular-nums">{nf(days)}</span> days.
-                Click a technique to see mitigations and mapped D3FEND countermeasures.
+                Techniques are colored by {heatLabel}. Click a technique to see mitigations and mapped D3FEND
+                countermeasures.
               </p>
             </div>
             <div className="shrink-0 flex items-center gap-3">
-              <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                Buckets: <span className="tabular-nums">0</span> (none) → <span className="tabular-nums">5</span>{" "}
-                (most)
+              <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                <span>Heat</span>
+                <div className="flex items-center gap-1" aria-hidden="true">
+                  {[0, 1, 2, 3, 4, 5].map((b) => (
+                    <span key={b} className={`h-3 w-3 rounded-[6px] border ${bucketClass(b)}`} />
+                  ))}
+                </div>
+                <span className="tabular-nums">0 → 5</span>
               </div>
               <button
                 type="button"
@@ -243,6 +279,45 @@ export function DefendHeatmap({
               </button>
             </div>
           </div>
+
+          <details className="mt-3 rounded-xl border border-zinc-200/70 dark:border-zinc-800/80 bg-white/40 dark:bg-black/20 px-4 py-3">
+            <summary className="cursor-pointer select-none text-xs font-medium text-zinc-700 dark:text-zinc-200">
+              What do “heat” and buckets (0–5) mean?
+            </summary>
+            <div className="mt-2 text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+              <p>
+                <span className="font-semibold text-zinc-700 dark:text-zinc-200">Heat</span> is the tile’s color
+                intensity. Higher bucket = “hotter” color.
+              </p>
+              <p className="mt-2">
+                <span className="font-semibold text-zinc-700 dark:text-zinc-200">Bucket 0</span> means the selected
+                metric is <span className="font-mono">0</span> for that technique.
+              </p>
+              <p className="mt-2">
+                <span className="font-semibold text-zinc-700 dark:text-zinc-200">Buckets 1–5</span> are{" "}
+                <span className="font-semibold">relative</span>: we log-scale the metric{" "}
+                (<span className="font-mono">log(1 + value)</span>) and split non-zero techniques into{" "}
+                <span className="font-semibold">quintiles</span> (20% bands). Bucket{" "}
+                <span className="font-mono">5</span> is “hotter” than the rest of the current dataset, not an absolute
+                threshold.
+              </p>
+              <p className="mt-2">
+                Active metric: <span className="font-mono">{heatBy}</span> ({heatLabel}).
+              </p>
+            </div>
+          </details>
+
+          {!hasAnyMentions && heatBy !== "mentions" ? (
+            <div className="mt-4 rounded-xl border border-sky-200/80 dark:border-sky-900/60 bg-sky-50/60 dark:bg-sky-950/20 px-4 py-3 text-sm text-zinc-700 dark:text-zinc-200">
+              No MITRE-tagged findings detected in the last <span className="font-mono">{days}</span> days yet, so all
+              tiles would be bucket <span className="font-mono">0</span>. Coloring falls back to{" "}
+              <span className="font-mono">{heatLabel}</span> until findings include technique IDs.
+            </div>
+          ) : !hasAnyHeat ? (
+            <div className="mt-4 rounded-xl border border-sky-200/80 dark:border-sky-900/60 bg-sky-50/60 dark:bg-sky-950/20 px-4 py-3 text-sm text-zinc-700 dark:text-zinc-200">
+              No data to score the matrix yet (all tiles are bucket <span className="font-mono">0</span>).
+            </div>
+          ) : null}
 
           {!hasAnyD3fend ? (
             <div className="mt-4 rounded-xl border border-amber-200/80 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20 px-4 py-3 text-sm text-zinc-700 dark:text-zinc-200">
@@ -274,7 +349,7 @@ export function DefendHeatmap({
             >
               <div ref={matrixContentRef} className="flex gap-4 min-w-max pb-4 px-4 pt-4">
               {columns.map((c) => (
-                <div key={c.slug} className="min-w-[250px] max-w-[250px]">
+                <div key={c.slug} className="min-w-[280px] max-w-[280px]">
                   <div className="sticky top-0 z-10 bg-white/80 dark:bg-zinc-950/80 backdrop-blur pb-2">
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{c.label}</div>
@@ -293,6 +368,9 @@ export function DefendHeatmap({
                     {c.items.map((it) => {
                       const subCount = it.subtechniques?.length ?? 0;
                       const cats = it.d3fendCategories ?? [];
+                      const heatCount =
+                        heatBy === "mentions" ? it.mentions90d : heatBy === "actors" ? it.actorCount : it.d3fendCount;
+                      const isHot = (it.bucket ?? 0) >= 5;
                       return (
                         <button
                           key={`${c.slug}-${it.id}`}
@@ -309,7 +387,11 @@ export function DefendHeatmap({
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex items-center gap-2">
-                              <div className="text-[11px] font-mono text-zinc-700 dark:text-zinc-300">{it.id}</div>
+                              <div
+                                className={`text-[11px] font-mono text-zinc-700 dark:text-zinc-300 ${isHot ? "font-semibold" : ""}`}
+                              >
+                                {it.id}
+                              </div>
                               {subCount ? (
                                 <span className="rounded-full bg-black/5 dark:bg-white/5 px-2 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-300 tabular-nums">
                                   +{nf(subCount)}
@@ -343,19 +425,23 @@ export function DefendHeatmap({
                                 </>
                               ) : null}
                               <div className="text-[11px] text-zinc-500 dark:text-zinc-400 tabular-nums">
-                                {nf(it.mentions90d)}
-                                {it.itw90d ? <span className="ml-1 text-rose-600 dark:text-rose-400">*</span> : null}
+                                {nf(heatCount)}
+                                {heatBy === "mentions" && it.itw90d ? (
+                                  <span className="ml-1 text-rose-600 dark:text-rose-400">*</span>
+                                ) : null}
                               </div>
                             </div>
                           </div>
-                          <div className="mt-0.5 text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                          <div
+                            className={`mt-0.5 text-xs text-zinc-900 dark:text-zinc-100 truncate ${isHot ? "font-bold" : "font-medium"}`}
+                          >
                             {it.name}
                           </div>
                         </button>
                       );
                     })}
                     {!c.items.length ? (
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">No techniques.</div>
+                      <div className="text-xs text-zinc-500 dark:text-zinc-400">No techniques matched this tactic yet.</div>
                     ) : null}
                   </div>
                 </div>

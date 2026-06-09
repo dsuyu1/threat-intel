@@ -1048,7 +1048,7 @@ export default async function DashboardHome({
   ];
 
   return (
-    <div className="h-full min-h-0 mx-auto max-w-[1440px] px-8 py-8">
+      <div className="h-full min-h-0 mx-auto max-w-[1600px] px-8 py-8">
       <div className="flex flex-col lg:flex-row lg:items-center gap-4">
         <div className="min-w-0">
           <div className="text-xs text-zinc-500">Dashboard</div>

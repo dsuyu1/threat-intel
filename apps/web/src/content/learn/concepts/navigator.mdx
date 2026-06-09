@@ -3,7 +3,7 @@ title: "Navigator"
 section: "Concepts"
 description: "Scenarios, scoring, coverage, and the scenario → action → detection pipeline."
 order: 8
-lastUpdated: "2026-06-07"
+lastUpdated: "2026-06-09"
 proOnly: true
 ---
 
@@ -67,3 +67,28 @@ At a high level:
 If you want to improve coverage quickly, start by generating detections for the top scenarios and deploying them into your SIEM.
 </Callout>
 
+## MITRE matrix map (buckets / heat)
+
+The **MITRE matrix map** (also called the “Defend heatmap”) shows ATT&CK techniques grouped under tactics, with each
+technique colored by a **bucket** from **0 → 5**.
+
+### What “heat” means
+
+**Heat** is the tile’s **color intensity**. Hotter colors mean a higher bucket.
+
+### What the buckets mean
+
+- **Bucket 0**: the selected metric is **0** for that technique (no activity / no evidence for the current dataset).
+- **Buckets 1–5**: a **relative** scale. We take the metric for all techniques, apply a log transform
+  (`log(1 + value)`), then split non-zero values into **5 quantiles (quintiles)**:
+  - 1 = lowest 20% of non-zero techniques
+  - 5 = highest 20% of non-zero techniques
+
+Because buckets are quantile-based, **Bucket 5 means “hot relative to the rest of the current dataset”**, not an
+absolute threshold.
+
+### What metric is used
+
+By default, the heatmap uses **findings mentions** for each technique in the selected time window. If there are no
+MITRE-tagged findings yet, the UI may fall back to other signals (like **actor prevalence**) so the matrix still has a
+useful “shape” until findings start including technique IDs.

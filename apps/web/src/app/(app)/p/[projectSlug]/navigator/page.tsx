@@ -446,7 +446,9 @@ export default async function NavigatorPage({
   })();
 
   const defendDays = 90;
-  const defendColumns = stage === "defend" ? await buildDefendHeatmapColumns({ db, days: defendDays }) : null;
+  const defendHeatmap = stage === "defend" ? await buildDefendHeatmapColumns({ db, days: defendDays }) : null;
+  const defendColumns = defendHeatmap?.columns ?? [];
+  const defendHeatBy = defendHeatmap?.heatBy ?? "mentions";
 
   const currentHrefParams: Record<string, string | undefined> = {
     stage,
@@ -792,7 +794,7 @@ export default async function NavigatorPage({
         </section>
       ) : stage === "defend" ? (
         <section className="mt-8">
-          <DefendHeatmap projectSlug={p.projectSlug} days={defendDays} columns={defendColumns ?? []} />
+          <DefendHeatmap projectSlug={p.projectSlug} days={defendDays} columns={defendColumns} heatBy={defendHeatBy} />
         </section>
       ) : (
         <>

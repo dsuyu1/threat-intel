@@ -53,7 +53,7 @@ export default async function MicrosoftTeamsPage() {
 
     if (isMissingTable) {
       return (
-        <div className="mx-auto max-w-[1440px] px-8 py-10">
+        <div className="mx-auto max-w-[1600px] px-8 py-10">
           <Card>
             <CardHeader
               title="Database not migrated"
@@ -90,9 +90,8 @@ export default async function MicrosoftTeamsPage() {
   }));
 
   return (
-    <div className="mx-auto max-w-[1440px] px-8 py-10">
+    <div className="mx-auto max-w-[1600px] px-8 py-10">
       <MicrosoftTeamsConnections rows={rows} />
     </div>
   );
 }
-

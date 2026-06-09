@@ -148,6 +148,27 @@ export async function GET(req: Request) {
           )
           .orderBy(asc(kgEntities.name));
 
+  const directD3Rows = await db
+    .select({
+      d3Id: kgEntities.entityId,
+      d3Name: kgEntities.name,
+      d3Attributes: kgEntities.attributes,
+    })
+    .from(kgRelations)
+    .innerJoin(
+      kgEntities,
+      and(eq(kgEntities.kind, "d3fend_technique"), eq(kgEntities.entityId, kgRelations.toId))
+    )
+    .where(
+      and(
+        eq(kgRelations.type, "technique_mapped_to_d3fend"),
+        eq(kgRelations.fromKind, "technique"),
+        eq(kgRelations.fromId, techniqueId),
+        eq(kgRelations.toKind, "d3fend_technique")
+      )
+    )
+    .orderBy(asc(kgEntities.name));
+
   const mitigationNameById = new Map(mitigations.map((m) => [m.id, m.name] as const));
   const viaMap = new Map<string, Array<{ id: string; name: string }>>();
   const d3Unique = new Map<string, { id: string; name: string; url: string | null; category: string | null }>();
@@ -166,6 +187,17 @@ export async function GET(req: Request) {
         category: d3Attrs?.category ? String(d3Attrs.category) : null,
       });
     }
+  }
+
+  for (const r of directD3Rows) {
+    if (d3Unique.has(r.d3Id)) continue;
+    const d3Attrs = (coerceJson(r.d3Attributes) ?? r.d3Attributes) as any;
+    d3Unique.set(r.d3Id, {
+      id: r.d3Id,
+      name: r.d3Name,
+      url: d3Attrs?.url ? String(d3Attrs.url) : null,
+      category: d3Attrs?.category ? String(d3Attrs.category) : null,
+    });
   }
 
   const viaMitigations = Array.from(viaMap.entries())

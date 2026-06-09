@@ -14,6 +14,7 @@ export default function PublicError({
   }, [error]);
 
   const isDev = process.env.NODE_ENV !== "production";
+  const digest = String(error?.digest ?? "");
 
   return (
     <div className="mx-auto max-w-[900px] px-8 py-10 space-y-4">
@@ -21,6 +22,11 @@ export default function PublicError({
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
         An unexpected error occurred. Try again, or return to Learn.
       </p>
+      {digest ? (
+        <p className="text-xs text-zinc-500">
+          Error ID: <span className="tabular-nums">{digest}</span>
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
@@ -45,4 +51,3 @@ export default function PublicError({
     </div>
   );
 }
-

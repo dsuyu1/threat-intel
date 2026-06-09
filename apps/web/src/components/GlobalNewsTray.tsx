@@ -49,7 +49,7 @@ export function GlobalNewsTray({
 
   return (
     <div className="absolute inset-x-0 bottom-0 z-10 pointer-events-none">
-      <div className="pointer-events-auto mx-auto w-full max-w-[1440px] px-6 pb-6">
+      <div className="pointer-events-auto mx-auto w-full max-w-[1600px] px-6 pb-6">
         <div
           className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/85 dark:bg-zinc-950/70 backdrop-blur shadow-2xl shadow-black/10 dark:shadow-black/60 overflow-hidden"
           onPointerDown={(e) => e.stopPropagation()}

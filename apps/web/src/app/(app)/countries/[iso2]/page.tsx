@@ -253,7 +253,7 @@ export default async function CountryPage({
   }, null);
 
   return (
-    <div className="mx-auto max-w-[1440px] px-8 py-10 space-y-8">
+    <div className="mx-auto max-w-[1600px] px-8 py-10 space-y-8">
       <header className="space-y-2">
         <Link
           href="/"

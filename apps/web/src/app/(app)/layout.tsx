@@ -19,7 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <>
       <nav className="no-print sticky top-0 shrink-0 z-50 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm border-b border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-[1440px] px-8 py-4">
+        <div className="mx-auto max-w-[1600px] px-8 py-4">
           <Nav signedIn={signedIn} />
         </div>
       </nav>
@@ -33,7 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </div>
 
       <footer className="no-print shrink-0 border-t border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/40 backdrop-blur-sm">
-        <div className="mx-auto max-w-[1440px] px-8 py-4 text-xs text-zinc-500 dark:text-zinc-400 flex flex-wrap items-center gap-3">
+        <div className="mx-auto max-w-[1600px] px-8 py-4 text-xs text-zinc-500 dark:text-zinc-400 flex flex-wrap items-center gap-3">
           <div className="mr-auto">Copyright © 2025 Damian Villarreal. All rights reserved.</div>
           <Link href="/learn" className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
             Learn

@@ -53,7 +53,7 @@ export default async function JiraAutomationPage() {
 
     if (isMissingTable) {
       return (
-        <div className="mx-auto max-w-[1440px] px-8 py-10">
+        <div className="mx-auto max-w-[1600px] px-8 py-10">
           <Card>
             <CardHeader
               title="Database not migrated"
@@ -89,7 +89,7 @@ export default async function JiraAutomationPage() {
   }));
 
   return (
-    <div className="mx-auto max-w-[1440px] px-8 py-10">
+    <div className="mx-auto max-w-[1600px] px-8 py-10">
       <JiraAutomationConnections rows={rows} />
     </div>
   );

@@ -20,6 +20,13 @@ export type DefendTacticColumn = {
   items: DefendTechniqueTile[];
 };
 
+export type DefendHeatBy = "mentions" | "actors" | "d3fend";
+
+export type DefendHeatmapData = {
+  heatBy: DefendHeatBy;
+  columns: DefendTacticColumn[];
+};
+
 const ATTACK_TACTIC_ORDER = [
   "reconnaissance",
   "resource-development",
@@ -88,7 +95,9 @@ function normalizeTechniqueTactics(attributes: unknown): string[] {
     const v = String(t ?? "").trim();
     if (!v) continue;
     const lower = v.toLowerCase();
-    const slug = allowed.has(lower) ? lower : ATTACK_TACTIC_SLUG_BY_LABEL[lower];
+    const dashed = lower.replace(/_/g, "-").replace(/\s+/g, "-");
+    const labelKey = lower.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+    const slug = allowed.has(dashed) ? dashed : allowed.has(lower) ? lower : ATTACK_TACTIC_SLUG_BY_LABEL[labelKey];
     if (!slug || !allowed.has(slug)) continue;
     if (seen.has(slug)) continue;
     seen.add(slug);
@@ -166,7 +175,7 @@ export async function buildDefendHeatmapColumns({
 }: {
   db: ReturnType<typeof getDb>;
   days: number;
-}): Promise<DefendTacticColumn[]> {
+}): Promise<DefendHeatmapData> {
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
   const t2m = alias(kgRelations, "t2m");
@@ -174,7 +183,7 @@ export async function buildDefendHeatmapColumns({
   const d3Ent = alias(kgEntities, "d3_ent");
   const d3Category = sql<string>`COALESCE(${d3Ent.attributes} ->> 'category', '')`;
 
-  const [techRows, actorRows, findingRows, d3Rows] = await Promise.all([
+  const [techRows, actorRows, findingRows, d3ViaPairs, d3DirectPairs] = await Promise.all([
     db
       .select({
         id: kgEntities.entityId,
@@ -221,8 +230,8 @@ export async function buildDefendHeatmapColumns({
     db
       .select({
         techniqueId: t2m.fromId,
+        d3Id: m2d3.toId,
         category: d3Category,
-        d3fendCount: sql<number>`count(distinct ${m2d3.toId})`,
       })
       .from(t2m)
       .innerJoin(
@@ -245,8 +254,29 @@ export async function buildDefendHeatmapColumns({
           eq(t2m.toKind, "mitigation")
         )
       )
-      .groupBy(t2m.fromId, d3Category)
-      .limit(20000),
+      .groupBy(t2m.fromId, m2d3.toId, d3Category)
+      .limit(50000),
+
+    db
+      .select({
+        techniqueId: kgRelations.fromId,
+        d3Id: kgRelations.toId,
+        category: d3Category,
+      })
+      .from(kgRelations)
+      .innerJoin(
+        d3Ent,
+        and(eq(d3Ent.kind, "d3fend_technique"), eq(d3Ent.entityId, kgRelations.toId))
+      )
+      .where(
+        and(
+          eq(kgRelations.type, "technique_mapped_to_d3fend"),
+          eq(kgRelations.fromKind, "technique"),
+          eq(kgRelations.toKind, "d3fend_technique")
+        )
+      )
+      .groupBy(kgRelations.fromId, kgRelations.toId, d3Category)
+      .limit(50000),
   ]);
 
   const actorCountByTechnique = new Map<string, number>();
@@ -254,11 +284,14 @@ export async function buildDefendHeatmapColumns({
     actorCountByTechnique.set(String(r.techniqueId).toUpperCase(), Number(r.actorCount ?? 0));
   }
 
-  const d3fendCountByTechnique = new Map<string, number>();
+  const d3fendIdsByTechnique = new Map<string, Set<string>>();
   const d3fendCategoriesByTechnique = new Map<string, Set<string>>();
-  for (const r of d3Rows) {
+  for (const r of [...d3ViaPairs, ...d3DirectPairs]) {
     const tid = String(r.techniqueId).toUpperCase();
-    d3fendCountByTechnique.set(tid, (d3fendCountByTechnique.get(tid) ?? 0) + Number(r.d3fendCount ?? 0));
+    const d3id = String(r.d3Id);
+    const ids = d3fendIdsByTechnique.get(tid) ?? new Set<string>();
+    ids.add(d3id);
+    d3fendIdsByTechnique.set(tid, ids);
 
     const cat = String((r as any).category ?? "").trim();
     if (cat) {
@@ -281,7 +314,20 @@ export async function buildDefendHeatmapColumns({
     }
   }
 
-  const bucketForTechnique = bucketizeCounts(Array.from(mentionsByTechnique.values()));
+  const hasMentions = Array.from(mentionsByTechnique.values()).some((x) => x > 0);
+  const hasActors = actorCountByTechnique.size > 0;
+  const hasD3fend = Array.from(d3fendIdsByTechnique.values()).some((set) => set.size > 0);
+
+  const heatBy: DefendHeatBy = hasMentions ? "mentions" : hasActors ? "actors" : hasD3fend ? "d3fend" : "mentions";
+
+  const techniqueHeatCounts = techRows.map((t) => {
+    const tid = String(t.id).toUpperCase();
+    if (heatBy === "mentions") return mentionsByTechnique.get(tid) ?? 0;
+    if (heatBy === "actors") return actorCountByTechnique.get(tid) ?? 0;
+    return (d3fendIdsByTechnique.get(tid) ?? new Set()).size;
+  });
+
+  const bucketForTechnique = bucketizeCounts(techniqueHeatCounts);
 
   const columns: DefendTacticColumn[] = ATTACK_TACTIC_ORDER.map((slug) => ({
     slug,
@@ -301,7 +347,7 @@ export async function buildDefendHeatmapColumns({
     const mentions90d = mentionsByTechnique.get(tid) ?? 0;
     const itw90d = itwByTechnique.get(tid) ?? 0;
     const actorCount = actorCountByTechnique.get(tid) ?? 0;
-    const d3fendCount = d3fendCountByTechnique.get(tid) ?? 0;
+    const d3fendCount = (d3fendIdsByTechnique.get(tid) ?? new Set()).size;
     const d3fendCategories = Array.from(d3fendCategoriesByTechnique.get(tid) ?? []).sort((a, b) =>
       a.localeCompare(b)
     );
@@ -339,6 +385,7 @@ export async function buildDefendHeatmapColumns({
     string,
     Array<{
       group: Group;
+      heat: number;
       mentions: number;
       itw: number;
       actors: number;
@@ -353,6 +400,7 @@ export async function buildDefendHeatmapColumns({
     if (!map) continue;
     const rows: Array<{
       group: Group;
+      heat: number;
       mentions: number;
       itw: number;
       actors: number;
@@ -368,13 +416,16 @@ export async function buildDefendHeatmapColumns({
       const mentions = members.reduce((acc, x) => acc + (x.mentions90d ?? 0), 0);
       const itw = members.reduce((acc, x) => acc + (x.itw90d ?? 0), 0);
       const actors = members.reduce((acc, x) => acc + (x.actorCount ?? 0), 0);
-      const d3 = members.reduce((acc, x) => acc + (x.d3fendCount ?? 0), 0);
+      const d3IdSet = new Set<string>();
+      for (const m of members) for (const id of d3fendIdsByTechnique.get(m.id) ?? []) d3IdSet.add(id);
+      const d3 = d3IdSet.size;
       const d3CatSet = new Set<string>();
       for (const m of members) for (const c of m.d3fendCategories ?? []) d3CatSet.add(c);
       const d3Cats = Array.from(d3CatSet.values()).sort((a, b) => a.localeCompare(b));
       const name = group.parent?.name ?? group.subs[0]?.name ?? group.parentId;
-      aggregatedCounts.push(mentions);
-      rows.push({ group, mentions, itw, actors, d3, d3Cats, name });
+      const heat = heatBy === "mentions" ? mentions : heatBy === "actors" ? actors : d3;
+      aggregatedCounts.push(heat);
+      rows.push({ group, heat, mentions, itw, actors, d3, d3Cats, name });
     }
     aggMetaByTactic.set(slug, rows);
   }
@@ -389,8 +440,10 @@ export async function buildDefendHeatmapColumns({
       const subs = r.group.subs
         .slice()
         .sort((a, b) => {
-          const ba = bucketForTechnique(a.mentions90d);
-          const bb = bucketForTechnique(b.mentions90d);
+          const va = heatBy === "mentions" ? a.mentions90d : heatBy === "actors" ? a.actorCount : a.d3fendCount;
+          const vb = heatBy === "mentions" ? b.mentions90d : heatBy === "actors" ? b.actorCount : b.d3fendCount;
+          const ba = bucketForTechnique(va);
+          const bb = bucketForTechnique(vb);
           if (bb !== ba) return bb - ba;
           if (b.mentions90d !== a.mentions90d) return b.mentions90d - a.mentions90d;
           return a.id.localeCompare(b.id);
@@ -398,7 +451,9 @@ export async function buildDefendHeatmapColumns({
         .map((s) => ({
           id: s.id,
           name: s.name,
-          bucket: bucketForTechnique(s.mentions90d),
+          bucket: bucketForTechnique(
+            heatBy === "mentions" ? s.mentions90d : heatBy === "actors" ? s.actorCount : s.d3fendCount
+          ),
           mentions90d: s.mentions90d,
           itw90d: s.itw90d,
           actorCount: s.actorCount,
@@ -409,7 +464,7 @@ export async function buildDefendHeatmapColumns({
       col.items.push({
         id: r.group.parentId,
         name: r.name,
-        bucket: bucketForGroup(r.mentions),
+        bucket: bucketForGroup(r.heat),
         mentions90d: r.mentions,
         itw90d: r.itw,
         actorCount: r.actors,
@@ -430,5 +485,5 @@ export async function buildDefendHeatmapColumns({
     });
   }
 
-  return columns;
+  return { heatBy, columns };
 }

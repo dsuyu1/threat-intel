@@ -11,6 +11,7 @@ type TechniqueTile = {
   itw90d: number;
   actorCount: number;
   d3fendCount: number;
+  d3fendCategories: string[];
   subtechniques?: TechniqueTile[];
 };
 
@@ -58,6 +59,19 @@ function nf(value: number) {
 function safeErrorMessage(err: unknown) {
   const anyErr = err as any;
   return String(anyErr?.message ?? err ?? "Unknown error");
+}
+
+function d3CategoryClass(category: string) {
+  const key = String(category ?? "")
+    .trim()
+    .toLowerCase();
+  if (key.includes("detect")) return "bg-sky-500/10 text-sky-700 dark:text-sky-300";
+  if (key.includes("harden")) return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+  if (key.includes("isolate")) return "bg-amber-500/10 text-amber-800 dark:text-amber-300";
+  if (key.includes("deceive")) return "bg-violet-500/10 text-violet-700 dark:text-violet-300";
+  if (key.includes("evict")) return "bg-rose-500/10 text-rose-700 dark:text-rose-300";
+  if (key.includes("restore")) return "bg-teal-500/10 text-teal-700 dark:text-teal-300";
+  return "bg-zinc-500/10 text-zinc-700 dark:text-zinc-300";
 }
 
 function parentTechniqueId(id: string) {
@@ -116,6 +130,11 @@ export function DefendHeatmap({
       return cur.id.localeCompare(best.id) < 0 ? cur : best;
     }, null as TechniqueTile | null);
   }, [selectedGroupMeta]);
+
+  const hasAnyD3fend = useMemo(
+    () => columns.some((c) => c.items.some((it) => (it.d3fendCount ?? 0) > 0)),
+    [columns]
+  );
 
   useEffect(() => {
     if (!selectedId) return;
@@ -224,6 +243,13 @@ export function DefendHeatmap({
               </button>
             </div>
           </div>
+
+          {!hasAnyD3fend ? (
+            <div className="mt-4 rounded-xl border border-amber-200/80 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20 px-4 py-3 text-sm text-zinc-700 dark:text-zinc-200">
+              No D3FEND mappings detected yet. Re-run <span className="font-mono">pnpm run:ttp -- --force</span> (and
+              make sure <span className="font-mono">TTP_SYNC_D3FEND</span> isn’t disabled), then refresh.
+            </div>
+          ) : null}
         </div>
 
         <div className={expanded ? "p-5 pt-4 flex-1 min-h-0" : "mt-5"}>
@@ -254,6 +280,11 @@ export function DefendHeatmap({
                       <div className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{c.label}</div>
                       <div className="text-[11px] text-zinc-500 dark:text-zinc-400 tabular-nums">
                         {nf(c.items.length)}
+                        {c.items.some((x) => (x.d3fendCount ?? 0) > 0) ? (
+                          <span className="ml-2 text-indigo-700 dark:text-indigo-300">
+                            D3 {nf(c.items.filter((x) => (x.d3fendCount ?? 0) > 0).length)}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -261,6 +292,7 @@ export function DefendHeatmap({
                   <div className="mt-2 space-y-2">
                     {c.items.map((it) => {
                       const subCount = it.subtechniques?.length ?? 0;
+                      const cats = it.d3fendCategories ?? [];
                       return (
                         <button
                           key={`${c.slug}-${it.id}`}
@@ -286,9 +318,29 @@ export function DefendHeatmap({
                             </div>
                             <div className="shrink-0 flex items-center gap-2">
                               {it.d3fendCount ? (
-                                <span className="rounded-full bg-indigo-500/10 dark:bg-indigo-400/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 tabular-nums">
-                                  D3 {nf(it.d3fendCount)}
-                                </span>
+                                <>
+                                  <span className="rounded-full bg-indigo-500/10 dark:bg-indigo-400/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 tabular-nums">
+                                    D3 {nf(it.d3fendCount)}
+                                  </span>
+                                  {cats.length ? (
+                                    <span
+                                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${d3CategoryClass(
+                                        cats[0]!
+                                      )}`}
+                                      title={`D3FEND: ${cats.join(", ")}`}
+                                    >
+                                      {cats[0]}
+                                    </span>
+                                  ) : null}
+                                  {cats.length > 1 ? (
+                                    <span
+                                      className="rounded-full bg-black/5 dark:bg-white/5 px-2 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-300 tabular-nums"
+                                      title={`D3FEND: ${cats.join(", ")}`}
+                                    >
+                                      +{nf(cats.length - 1)}
+                                    </span>
+                                  ) : null}
+                                </>
                               ) : null}
                               <div className="text-[11px] text-zinc-500 dark:text-zinc-400 tabular-nums">
                                 {nf(it.mentions90d)}
@@ -442,9 +494,21 @@ export function DefendHeatmap({
                           </div>
                           <div className="shrink-0 flex items-center gap-2">
                             {s.d3fendCount ? (
-                              <span className="rounded-full bg-indigo-500/10 dark:bg-indigo-400/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 tabular-nums">
-                                D3 {nf(s.d3fendCount)}
-                              </span>
+                              <>
+                                <span className="rounded-full bg-indigo-500/10 dark:bg-indigo-400/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 tabular-nums">
+                                  D3 {nf(s.d3fendCount)}
+                                </span>
+                                {s.d3fendCategories?.length ? (
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${d3CategoryClass(
+                                      s.d3fendCategories[0]!
+                                    )}`}
+                                    title={`D3FEND: ${s.d3fendCategories.join(", ")}`}
+                                  >
+                                    {s.d3fendCategories[0]}
+                                  </span>
+                                ) : null}
+                              </>
                             ) : null}
                             <div className="text-[11px] text-zinc-500 dark:text-zinc-400 tabular-nums">
                               {nf(s.mentions90d)}

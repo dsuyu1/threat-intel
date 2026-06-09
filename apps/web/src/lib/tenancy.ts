@@ -29,7 +29,14 @@ function getLocalFallback() {
 }
 
 function allowLocalAuthFallback() {
-  return process.env.NODE_ENV !== "production";
+  // NOTE (beta): In production we normally fail-closed and require Clerk auth.
+  // While the product is in a public beta (no payments / no auth-gated access),
+  // enable a temporary "public beta" mode that mints a local viewer context when
+  // the request is unauthenticated. Turn this OFF before GA / billing.
+  const publicBeta =
+    (process.env["NAVIGATOR_PUBLIC_BETA"] ?? "").toLowerCase() === "1" ||
+    (process.env["NAVIGATOR_PUBLIC_BETA"] ?? "").toLowerCase() === "true";
+  return process.env.NODE_ENV !== "production" || publicBeta;
 }
 
 async function getOrCreateUser(params: { clerkId: string; email: string; tier: string }) {

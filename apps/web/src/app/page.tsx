@@ -8,12 +8,12 @@ export default async function Home() {
   const a = await auth().catch(() => null);
 
   if (!a?.userId) {
-    if (process.env.NODE_ENV !== "production") {
-      const { getViewerContext } = await import("../lib/tenancy");
-      const ctx = await getViewerContext();
-      redirect(`/p/${ctx.project.slug}`);
-    }
-    redirect("/learn");
+    // NOTE (beta): In production we normally send signed-out users to a public landing/docs page.
+    // While the product is in a public beta (no payments), we instead drop users straight into
+    // the dashboard by minting a local viewer context (see NAVIGATOR_PUBLIC_BETA in tenancy.ts).
+    const { getViewerContext } = await import("../lib/tenancy");
+    const ctx = await getViewerContext();
+    redirect(`/p/${ctx.project.slug}`);
   }
 
   const { getViewerContext } = await import("../lib/tenancy");

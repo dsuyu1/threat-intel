@@ -14,7 +14,12 @@ import { ThemeToggle } from "../../components/ThemeToggle";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const a = await auth().catch(() => null);
   const signedIn = Boolean(a?.userId);
-  if (process.env.NODE_ENV === "production" && !signedIn) redirect("/sign-in");
+  const publicBeta =
+    (process.env["NAVIGATOR_PUBLIC_BETA"] ?? "").toLowerCase() === "1" ||
+    (process.env["NAVIGATOR_PUBLIC_BETA"] ?? "").toLowerCase() === "true";
+  // NOTE (beta): while NAVIGATOR_PUBLIC_BETA is enabled, don't force sign-in for app routes.
+  // Turn this OFF before GA / billing.
+  if (process.env.NODE_ENV === "production" && !publicBeta && !signedIn) redirect("/sign-in");
 
   return (
     <>

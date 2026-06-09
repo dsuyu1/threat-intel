@@ -14,6 +14,7 @@ export default function GlobalError({
   }, [error]);
 
   const isDev = process.env.NODE_ENV !== "production";
+  const digest = String(error?.digest ?? "");
 
   return (
     <div className="mx-auto max-w-[900px] px-8 py-10 space-y-4">
@@ -21,6 +22,11 @@ export default function GlobalError({
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
         An unexpected error occurred. Try again, or return to the dashboard.
       </p>
+      {digest ? (
+        <p className="text-xs text-zinc-500">
+          Error ID: <span className="tabular-nums">{digest}</span>
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
@@ -30,10 +36,10 @@ export default function GlobalError({
           Try again
         </button>
         <a
-          href="/"
+          href="/app"
           className="rounded-lg border border-zinc-200 dark:border-zinc-800 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
         >
-          Back to dashboard
+          Back to app
         </a>
       </div>
 
@@ -45,4 +51,3 @@ export default function GlobalError({
     </div>
   );
 }
-

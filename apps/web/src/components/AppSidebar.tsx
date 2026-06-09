@@ -27,7 +27,7 @@ function projectizeHref(href: string, projectSlug: string | null) {
   if (href === "/sbom" || href.startsWith("/sbom/")) return `/p/${projectSlug}${href}`;
   if (href === "/tabletop" || href.startsWith("/tabletop/")) return `/p/${projectSlug}${href}`;
   if (href === "/api-keys" || href.startsWith("/api-keys/")) return `/p/${projectSlug}${href}`;
-  if (href === "/learn" || href.startsWith("/learn/")) return `/p/${projectSlug}${href}`;
+  if (href === "/defend" || href.startsWith("/defend/")) return `/p/${projectSlug}${href}`;
   return href;
 }
 

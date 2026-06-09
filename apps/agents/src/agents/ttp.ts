@@ -309,7 +309,57 @@ function detectDelimiter(input: string): "," | "\t" {
 }
 
 const MITRE_MITIGATION_ID_RE = /\bM\d{4}\b/g;
-const D3FEND_ID_RE = /\bD3-[A-Z0-9]{2,}\b/g;
+const STIX_MITIGATION_ID_RE =
+  /\bcourse-of-action--[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
+const D3FEND_LEGACY_ID_RE = /\bD3-[A-Z0-9]{2,}\b/g;
+const D3FEND_PREFIX_ID_RE = /\bd3f:[A-Za-z0-9_-]+\b/gi;
+const D3FEND_OWL_ID_RE = /d3fend\.owl#[A-Za-z0-9_-]+/gi;
+
+function normalizeD3fendId(value: string): string | null {
+  const v = String(value ?? "").trim();
+  if (!v) return null;
+
+  if (/^D3-[A-Za-z0-9]{2,}$/.test(v)) return v.toUpperCase();
+
+  const pref = v.match(/^d3f:([A-Za-z0-9_-]+)$/i);
+  if (pref?.[1]) return `d3f:${pref[1]}`;
+
+  const owl = v.match(/d3fend\.owl#([A-Za-z0-9_-]+)$/i);
+  if (owl?.[1]) return `d3f:${owl[1]}`;
+
+  const hashIndex = v.lastIndexOf("#");
+  if (hashIndex >= 0) {
+    const frag = v.slice(hashIndex + 1).trim();
+    if (frag && /^[A-Za-z0-9_-]+$/.test(frag)) return `d3f:${frag}`;
+  }
+
+  return null;
+}
+
+function extractD3fendIds(raw: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (id: string) => {
+    const norm = normalizeD3fendId(id);
+    if (!norm) return;
+    if (seen.has(norm)) return;
+    seen.add(norm);
+    out.push(norm);
+  };
+
+  for (const m of raw.match(D3FEND_LEGACY_ID_RE) ?? []) push(m);
+  for (const m of raw.match(D3FEND_PREFIX_ID_RE) ?? []) push(m);
+  for (const m of raw.match(D3FEND_OWL_ID_RE) ?? []) push(m);
+
+  return out;
+}
+
+function extractMitigationId(raw: string): string | null {
+  const mids = raw.match(MITRE_MITIGATION_ID_RE) ?? [];
+  if (mids[0]) return String(mids[0]).toUpperCase();
+  const stix = raw.match(STIX_MITIGATION_ID_RE) ?? [];
+  return stix[0] ?? null;
+}
 
 export function parseD3fendTechniquesCsv(csv: string): Map<string, D3fendTechniqueMeta> {
   const delimiter = detectDelimiter(csv);
@@ -327,12 +377,13 @@ export function parseD3fendTechniquesCsv(csv: string): Map<string, D3fendTechniq
 
   const out = new Map<string, D3fendTechniqueMeta>();
   for (const r of rows.slice(1)) {
-    const id = String(r[idxId] ?? "").trim();
-    if (!id || !/^D3-/.test(id)) continue;
+    const rawId = String(r[idxId] ?? "").trim();
+    const id = rawId ? normalizeD3fendId(rawId) : null;
+    if (!id) continue;
     const name = String(r[idxName] ?? "").trim() || id;
     const description = String(r[idxDesc] ?? "").trim() || null;
     const category = String(r[idxCategory] ?? "").trim() || null;
-    const url = `https://d3fend.mitre.org/search/?q=${encodeURIComponent(id)}`;
+    const url = `https://d3fend.mitre.org/search/?q=${encodeURIComponent(rawId || id)}`;
     out.set(id, { id, name, description, category, url });
   }
   return out;
@@ -352,17 +403,36 @@ export function parseD3fendMitigationMappings(payload: string): Array<{ mitigati
           ? (parsed as any).rows
           : Array.isArray((parsed as any)?.data)
             ? (parsed as any).data
-            : [];
+            : Array.isArray((parsed as any)?.mappings)
+              ? (parsed as any).mappings
+              : [];
 
       const out: Array<{ mitigationId: string; d3fendIds: string[] }> = [];
+
+      const push = (mitigationId: string, d3fendIds: string[]) => {
+        if (!mitigationId || d3fendIds.length === 0) return;
+        out.push({ mitigationId, d3fendIds: Array.from(new Set(d3fendIds)) });
+      };
+
       for (const r of rows) {
-        if (!r || typeof r !== "object") continue;
-        const raw = JSON.stringify(r);
-        const mids = raw.match(MITRE_MITIGATION_ID_RE) ?? [];
-        const d3s = raw.match(D3FEND_ID_RE) ?? [];
-        const mitigationId = mids[0];
+        if (r == null) continue;
+        const raw = typeof r === "string" ? r : JSON.stringify(r);
+        const mitigationId = extractMitigationId(raw);
+        const d3s = extractD3fendIds(raw);
         if (!mitigationId || d3s.length === 0) continue;
-        out.push({ mitigationId, d3fendIds: Array.from(new Set(d3s)) });
+        push(mitigationId, d3s);
+      }
+
+      // Some formats are a direct mapping object (e.g., { "M1036": ["d3f:Foo", ...], ... }).
+      if (!out.length && parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+          const mitigationId = extractMitigationId(String(k));
+          if (!mitigationId) continue;
+          const raw = typeof v === "string" ? v : JSON.stringify(v);
+          const d3s = extractD3fendIds(raw);
+          if (!d3s.length) continue;
+          push(mitigationId, d3s);
+        }
       }
       if (out.length) return out;
     } catch {
@@ -376,9 +446,8 @@ export function parseD3fendMitigationMappings(payload: string): Array<{ mitigati
     const out: Array<{ mitigationId: string; d3fendIds: string[] }> = [];
     for (const r of rows.slice(1)) {
       const joined = r.join(" ");
-      const mids = joined.match(MITRE_MITIGATION_ID_RE) ?? [];
-      const d3s = joined.match(D3FEND_ID_RE) ?? [];
-      const mitigationId = mids[0];
+      const mitigationId = extractMitigationId(joined);
+      const d3s = extractD3fendIds(joined);
       if (!mitigationId || d3s.length === 0) continue;
       out.push({ mitigationId, d3fendIds: Array.from(new Set(d3s)) });
     }
@@ -388,9 +457,8 @@ export function parseD3fendMitigationMappings(payload: string): Array<{ mitigati
   const out: Array<{ mitigationId: string; d3fendIds: string[] }> = [];
   const trs = s.match(/<tr[\s\S]*?<\/tr>/gi) ?? [];
   for (const tr of trs) {
-    const mids = tr.match(MITRE_MITIGATION_ID_RE) ?? [];
-    const d3s = tr.match(D3FEND_ID_RE) ?? [];
-    const mitigationId = mids[0];
+    const mitigationId = extractMitigationId(tr);
+    const d3s = extractD3fendIds(tr);
     if (!mitigationId || d3s.length === 0) continue;
     out.push({ mitigationId, d3fendIds: Array.from(new Set(d3s)) });
   }
@@ -452,10 +520,48 @@ async function syncD3fendMappings(now: Date, sourceId: string) {
   const metaById = parseD3fendTechniquesCsv(csvRes.text);
   const mappings = parseD3fendMitigationMappings(mappingRes.text);
 
+  if (!mappings.length) {
+    const text = mappingRes.text ?? "";
+    const mitreCount = (text.match(MITRE_MITIGATION_ID_RE) ?? []).length;
+    const stixCount = (text.match(STIX_MITIGATION_ID_RE) ?? []).length;
+    const d3Legacy = (text.match(D3FEND_LEGACY_ID_RE) ?? []).length;
+    const d3Pref = (text.match(D3FEND_PREFIX_ID_RE) ?? []).length;
+    const d3Owl = (text.match(D3FEND_OWL_ID_RE) ?? []).length;
+    console.warn(
+      `[TtpAgent] D3FEND mapping parse produced 0 rows. Source: ${mappingRes.url} | M: ${mitreCount} | COA: ${stixCount} | D3-: ${d3Legacy} | d3f:: ${d3Pref} | owl#: ${d3Owl}`
+    );
+    console.warn(`[TtpAgent] D3FEND mapping response head: ${text.slice(0, 400)}`);
+  }
+
+  const db = getDb();
+  const mitigationStixRows = await db
+    .select({
+      mitigationId: kgEntities.entityId,
+      stixId: sql<string>`(${kgEntities.attributes} ->> 'stixId')`,
+    })
+    .from(kgEntities)
+    .where(eq(kgEntities.kind, "mitigation"))
+    .limit(5000);
+
+  const mitigationIdByStix = new Map<string, string>();
+  for (const r of mitigationStixRows) {
+    const stixId = String(r.stixId ?? "").trim();
+    if (!stixId) continue;
+    mitigationIdByStix.set(stixId, String(r.mitigationId));
+  }
+
   const entityById = new Map<string, EntityRow>();
   const relationByKey = new Map<string, RelationRow>();
 
   for (const m of mappings) {
+    const mitId =
+      /^M\d{4}$/i.test(m.mitigationId)
+        ? m.mitigationId.toUpperCase()
+        : m.mitigationId.startsWith("course-of-action--")
+          ? mitigationIdByStix.get(m.mitigationId) ?? null
+          : null;
+    if (!mitId) continue;
+
     for (const d3id of m.d3fendIds) {
       const meta = metaById.get(d3id) ?? null;
       if (!entityById.has(d3id)) {
@@ -473,11 +579,11 @@ async function syncD3fendMappings(now: Date, sourceId: string) {
         });
       }
 
-      const key = `mitigation_mapped_to_d3fend||${m.mitigationId}||${d3id}`;
+      const key = `mitigation_mapped_to_d3fend||${mitId}||${d3id}`;
       relationByKey.set(key, {
         type: "mitigation_mapped_to_d3fend",
         fromKind: "mitigation",
-        fromId: m.mitigationId,
+        fromId: mitId,
         toKind: "d3fend_technique",
         toId: d3id,
         support: 1,
@@ -883,7 +989,11 @@ export async function runTtpAgent() {
         name: mit.name,
         aliases: null,
         description: mit.description ?? null,
-        attributes: { source: "mitre-attack", citations: getAttackCitations(mit.external_references) },
+        attributes: {
+          source: "mitre-attack",
+          stixId: mit.id,
+          citations: getAttackCitations(mit.external_references),
+        },
       });
       idMap.set(mit.id, { kind: "mitigation", entityId: mid });
     } else if (obj.type === "campaign") {

@@ -576,7 +576,7 @@ export function GlobeHero({
 
   const [mode, setMode] = useState<"webgl" | "flat">("webgl");
   const [isDark, setIsDark] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [drawer, setDrawer] = useState<DrawerState | null>(null);
   const [drawerRect, setDrawerRect] = useState<DrawerRect | null>(null);
   const [drawerUserResized, setDrawerUserResized] = useState(false);

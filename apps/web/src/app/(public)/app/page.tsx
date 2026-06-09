@@ -8,7 +8,9 @@ export default async function AppEntry() {
   try {
     const ctx = await getViewerContext();
     redirect(`/p/${ctx.project.slug}`);
-  } catch {
-    redirect("/sign-in");
+  } catch (err) {
+    const msg = String((err as any)?.message ?? "");
+    if (msg.toLowerCase().includes("not authenticated")) redirect("/sign-in");
+    throw err;
   }
 }

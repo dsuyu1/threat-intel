@@ -2,6 +2,7 @@ export const runtime = "edge";
 
 import { Suspense } from "react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { DotCursor } from "../../components/DotCursor";
 import { RouteLoadingOverlay } from "../../components/RouteLoadingOverlay";
@@ -13,6 +14,7 @@ import { ThemeToggle } from "../../components/ThemeToggle";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const a = await auth().catch(() => null);
   const signedIn = Boolean(a?.userId);
+  if (process.env.NODE_ENV === "production" && !signedIn) redirect("/sign-in");
 
   return (
     <>

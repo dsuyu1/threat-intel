@@ -2,15 +2,21 @@ export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 import { redirect } from "next/navigation";
-import { getViewerContext } from "../lib/tenancy";
+import { auth } from "@clerk/nextjs/server";
 
 export default async function Home() {
-  let ctx: Awaited<ReturnType<typeof getViewerContext>> | null = null;
-  try {
-    ctx = await getViewerContext();
-  } catch {
+  const a = await auth().catch(() => null);
+
+  if (!a?.userId) {
+    if (process.env.NODE_ENV !== "production") {
+      const { getViewerContext } = await import("../lib/tenancy");
+      const ctx = await getViewerContext();
+      redirect(`/p/${ctx.project.slug}`);
+    }
     redirect("/learn");
   }
-  if (!ctx) redirect("/learn");
+
+  const { getViewerContext } = await import("../lib/tenancy");
+  const ctx = await getViewerContext();
   redirect(`/p/${ctx.project.slug}`);
 }

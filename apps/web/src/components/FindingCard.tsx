@@ -174,26 +174,30 @@ export function FindingCard({ finding, teaser = false, className = "" }: Props) 
           {!teaser ? (
             <div className="flex items-center gap-3 mt-2">
               {primarySourceUrl ? (
-                <a
-                  href={primarySourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
                   className="text-xs text-blue-500 hover:text-blue-400 transition-colors"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(primarySourceUrl, "_blank", "noopener,noreferrer");
+                  }}
+                  title={primarySourceUrl}
                 >
                   Source →
-                </a>
+                </button>
               ) : null}
               {!isPocFinding && finding.pocUrl ? (
-                <a
-                  href={finding.pocUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
                   className="text-xs text-blue-500 hover:text-blue-400 transition-colors"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(finding.pocUrl, "_blank", "noopener,noreferrer");
+                  }}
+                  title={finding.pocUrl}
                 >
                   PoC →
-                </a>
+                </button>
               ) : null}
             </div>
           ) : null}

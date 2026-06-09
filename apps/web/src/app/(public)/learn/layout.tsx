@@ -21,3 +21,4 @@ export default function LearnLayout({ children }: { children: React.ReactNode })
     </div>
   );
 }
+

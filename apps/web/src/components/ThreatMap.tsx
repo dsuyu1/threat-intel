@@ -138,7 +138,7 @@ export function ThreatMap({ findings }: Props) {
       .append("path")
       .attr("class", "country")
       .attr("d", path)
-      .attr("fill", "#18181b")   // zinc-900
+      .attr("fill", "#121a2e")   // navy surface
       .attr("stroke", "#3f3f46") // zinc-700
       .attr("stroke-width", 0.5);
 
@@ -194,7 +194,7 @@ export function ThreatMap({ findings }: Props) {
       .append("circle")
       .attr("r", 4)
       .attr("fill", (d) => AGENT_COLOR[d.agent] ?? "#3b82f6")
-      .attr("stroke", "#141414") // dark bg
+      .attr("stroke", "#060a16") // dark bg
       .attr("stroke-width", 1.5)
       .attr("opacity", 0.9);
 
@@ -258,7 +258,7 @@ export function ThreatMap({ findings }: Props) {
         ref={svgRef}
         viewBox={`0 0 ${dimensions.width} ${dimensions.height}`}
         width="100%"
-        className="block bg-[#141414]"
+        className="block bg-[#060a16]"
       />
 
       {/* Popup */}

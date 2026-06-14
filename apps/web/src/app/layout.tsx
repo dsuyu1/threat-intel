@@ -20,7 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.className} h-full dark`} suppressHydrationWarning>
       <body
-        className="h-full flex flex-col overflow-hidden bg-white text-zinc-900 dark:bg-[#141414] dark:text-zinc-200 antialiased tracking-tight"
+        className="h-full flex flex-col overflow-hidden antialiased tracking-tight"
       >
         <ClerkProvider>
           <Script id="theme-init" strategy="beforeInteractive">{`

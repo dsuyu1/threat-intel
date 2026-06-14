@@ -341,6 +341,16 @@ export function CustomizableDashboard({
             className="px-4 py-3"
             right={
               <div className="flex items-center gap-2">
+                <div className="hidden md:flex items-center gap-3 mr-1 text-[11px] text-zinc-600 dark:text-zinc-400">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-indigo-400" aria-hidden="true" />
+                    Current
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400" aria-hidden="true" />
+                    Previous
+                  </span>
+                </div>
                 <div className="hidden sm:flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-black/20 p-1">
                   {tabs.map((t) => {
                     const active = t.id === data.range;

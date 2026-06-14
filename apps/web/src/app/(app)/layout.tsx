@@ -23,13 +23,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <>
-      <nav className="no-print sticky top-0 shrink-0 z-50 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm border-b border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-[1600px] px-8 py-4">
+      <nav className="no-print sticky top-0 shrink-0 z-50 border-b border-[color:var(--ti-border)] bg-[color:var(--ti-nav-bg)] backdrop-blur-xl">
+        <div className="mx-auto max-w-[1600px] px-6 md:px-8 py-3">
           <Nav signedIn={signedIn} />
         </div>
       </nav>
       <div className="flex-1 min-h-0 flex">
-        <aside className="no-print hidden lg:block w-64 shrink-0 bg-white/40 dark:bg-zinc-950/30 backdrop-blur-sm">
+        <aside className="no-print hidden lg:block w-64 shrink-0 border-r border-[color:var(--ti-border)] bg-white/40 dark:bg-zinc-950/30 backdrop-blur-sm">
           <div className="h-full overflow-y-auto px-3 py-4">
             <AppSidebar />
           </div>
@@ -37,18 +37,27 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <main className="flex-1 min-w-0 overflow-y-auto">{children}</main>
       </div>
 
-      <footer className="no-print shrink-0 border-t border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/40 backdrop-blur-sm">
-        <div className="mx-auto max-w-[1600px] px-8 py-4 text-xs text-zinc-500 dark:text-zinc-400 flex flex-wrap items-center gap-3">
+      <footer className="no-print shrink-0 border-t border-[color:var(--ti-border)] bg-[color:var(--ti-nav-bg)] backdrop-blur-sm">
+        <div className="mx-auto max-w-[1600px] px-6 md:px-8 py-4 text-xs text-[color:var(--ti-muted)] flex flex-wrap items-center gap-3">
           <div className="mr-auto">Copyright © 2025 Damian Villarreal. All rights reserved.</div>
-          <Link href="/learn" className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
+          <Link
+            href="/learn"
+            className="rounded-md px-1.5 py-1 hover:text-[color:var(--ti-fg)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ti-ring)]"
+          >
             Learn
           </Link>
           <span aria-hidden="true">•</span>
-          <Link href="/terms" className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
+          <Link
+            href="/terms"
+            className="rounded-md px-1.5 py-1 hover:text-[color:var(--ti-fg)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ti-ring)]"
+          >
             Terms
           </Link>
           <span aria-hidden="true">•</span>
-          <Link href="/privacy" className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
+          <Link
+            href="/privacy"
+            className="rounded-md px-1.5 py-1 hover:text-[color:var(--ti-fg)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ti-ring)]"
+          >
             Privacy
           </Link>
         </div>
@@ -64,35 +73,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
 function Nav({ signedIn }: { signedIn: boolean }) {
   return (
-    <nav className="flex items-center gap-6">
+    <nav className="flex items-center gap-3">
       <a
-        href="https://damianvillarreal.com"
-        className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors duration-250 ease-[cubic-bezier(0.16,1,0.3,1)]"
+        href="https://damianvillarreal.com/"
         target="_blank"
         rel="noreferrer"
+        className="rounded-md px-1.5 py-1 text-sm text-[color:var(--ti-muted)] hover:text-[color:var(--ti-fg)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ti-ring)]"
       >
         blog
       </a>
       <a
         href="https://damianvillarreal.com/about"
-        className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors duration-250 ease-[cubic-bezier(0.16,1,0.3,1)]"
         target="_blank"
         rel="noreferrer"
+        className="rounded-md px-1.5 py-1 text-sm text-[color:var(--ti-muted)] hover:text-[color:var(--ti-fg)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ti-ring)]"
       >
         about
       </a>
-      <Link
-        href="/terms"
-        className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors duration-250 ease-[cubic-bezier(0.16,1,0.3,1)]"
-      >
-        terms
-      </Link>
-      <Link
-        href="/privacy"
-        className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors duration-250 ease-[cubic-bezier(0.16,1,0.3,1)]"
-      >
-        privacy
-      </Link>
       <div className="ml-auto flex items-center gap-3">
         {signedIn ? <ProjectSwitcher /> : null}
         <ThemeToggle />

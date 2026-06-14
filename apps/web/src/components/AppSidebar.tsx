@@ -67,7 +67,7 @@ export function AppSidebar() {
       {PLATFORM_NAV_SECTIONS.map((section) => (
         <div key={section.label} className="flex flex-col gap-2">
           <div className="px-2">
-            <div className="text-[11px] uppercase tracking-wider text-zinc-500">
+            <div className="text-[11px] uppercase tracking-wider text-[color:var(--ti-muted)]">
               {section.label}
             </div>
           </div>
@@ -85,17 +85,17 @@ export function AppSidebar() {
                   key={item.href}
                   href={href}
                   className={clsx(
-                    "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] transition-colors",
-                    "hover:bg-black/5 dark:hover:bg-white/5",
+                    "group flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] border border-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ti-ring)]",
+                    "hover:bg-black/5 dark:hover:bg-white/5 hover:border-[color:var(--ti-border)]",
                     active
-                      ? "bg-black/5 dark:bg-white/5 text-zinc-900 dark:text-zinc-100"
-                      : "text-zinc-700 dark:text-zinc-300"
+                      ? "bg-[color:var(--ti-card)] text-[color:var(--ti-fg)] border-[color:var(--ti-border)] shadow-[var(--ti-shadow-sm)]"
+                      : "text-[color:var(--ti-muted)]"
                   )}
                 >
                   <span
                     className={clsx(
                       "inline-flex items-center justify-center",
-                      active ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-500"
+                      active ? "text-[color:var(--ti-fg)]" : "text-[color:var(--ti-muted)]"
                     )}
                   >
                     <Icon aria-hidden="true" size={19} />

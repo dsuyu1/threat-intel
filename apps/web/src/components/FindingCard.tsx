@@ -89,7 +89,7 @@ export function FindingCard({ finding, teaser = false, className = "" }: Props) 
   return (
     <div
       className={[
-        "card bg-white dark:bg-[#141414] border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors",
+        "card bg-white dark:bg-[#0d1324] border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors",
         className,
       ].join(" ")}
     >

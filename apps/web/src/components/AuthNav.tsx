@@ -8,13 +8,13 @@ export function AuthNav() {
       <SignedOut>
         <a
           href="/sign-in"
-          className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-black/20 px-3 py-1.5 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-white/80 dark:hover:bg-black/30 transition-colors"
+          className="inline-flex h-9 items-center rounded-lg border border-[color:var(--ti-border)] bg-[color:var(--ti-card)] px-3 text-sm text-[color:var(--ti-fg)] hover:bg-white/85 dark:hover:bg-white/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ti-ring)]"
         >
           Sign in
         </a>
         <a
           href="/sign-up"
-          className="rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 px-3 py-1.5 text-sm font-medium hover:opacity-95 transition-opacity"
+          className="inline-flex h-9 items-center rounded-lg bg-[color:var(--color-brand)] px-3 text-sm font-semibold text-[color:var(--color-brand-fg)] shadow-sm shadow-black/10 hover:brightness-[1.02] active:brightness-[0.98] transition-[filter] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ti-ring)]"
         >
           Sign up
         </a>

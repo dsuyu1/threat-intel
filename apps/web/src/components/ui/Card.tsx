@@ -11,7 +11,7 @@ export function Card({
   return (
     <div
       className={clsx(
-        "card rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-black/30 backdrop-blur shadow-2xl shadow-black/10 dark:shadow-black/40",
+        "rounded-[var(--ti-radius)] border border-[color:var(--ti-card-border)] bg-[color:var(--ti-card)] backdrop-blur-xl shadow-[var(--ti-shadow-sm)]",
         className
       )}
     >
@@ -39,7 +39,7 @@ export function CardHeader({
     <div
       className={clsx(
         "flex items-start justify-between gap-4",
-        border ? "border-b border-zinc-200/70 dark:border-zinc-800/80" : null,
+        border ? "border-b border-[color:var(--ti-border)]" : null,
         dense ? "px-4 py-3" : "px-5 py-4",
         className
       )}
@@ -47,7 +47,7 @@ export function CardHeader({
       <div className="min-w-0">
         <div
           className={clsx(
-            "font-semibold text-zinc-900 dark:text-zinc-100",
+            "font-semibold text-[color:var(--ti-fg)]",
             dense ? "text-xs" : "text-sm"
           )}
         >
@@ -56,7 +56,7 @@ export function CardHeader({
         {description ? (
           <div
             className={clsx(
-              "text-zinc-600 dark:text-zinc-400",
+              "text-[color:var(--ti-muted)]",
               dense ? "mt-0.5 text-[11px]" : "mt-1 text-xs"
             )}
           >

@@ -22,23 +22,23 @@ export function KpiCard(props: {
   const inner = (
     <Card
       className={clsx(
-        "shadow-sm dark:shadow-black/30 bg-white/70 dark:bg-black/30",
+        "transition-[box-shadow,transform,border-color] motion-reduce:transition-none",
         clickable
-          ? "transition-colors group-hover:bg-white/90 dark:group-hover:bg-black/40 group-hover:border-zinc-300 dark:group-hover:border-zinc-700"
+          ? "group-hover:shadow-[var(--ti-shadow-md)] group-hover:border-[color:var(--ti-border)] group-hover:-translate-y-[1px] motion-reduce:group-hover:translate-y-0"
           : null
       )}
     >
       <div className="px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[11px] font-medium tracking-wide uppercase text-zinc-600 dark:text-zinc-400">
+            <div className="text-[11px] font-medium tracking-wide uppercase text-[color:var(--ti-muted)]">
               {props.label}
             </div>
-            <div className="mt-2 text-2xl font-semibold text-zinc-900 dark:text-zinc-100 tabular-nums">
+            <div className="mt-2 text-3xl font-semibold tracking-tight text-[color:var(--ti-fg)] tabular-nums">
               {props.value}
             </div>
             {props.hint ? (
-              <div className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-400">{props.hint}</div>
+              <div className="mt-1 text-[11px] text-[color:var(--ti-muted)]">{props.hint}</div>
             ) : null}
           </div>
 
@@ -65,7 +65,7 @@ export function KpiCard(props: {
   return (
     <a
       href={props.href}
-      className="group block rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-400/60 dark:focus:ring-zinc-500/60"
+      className="group block rounded-[var(--ti-radius)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ti-ring)]"
     >
       {inner}
     </a>

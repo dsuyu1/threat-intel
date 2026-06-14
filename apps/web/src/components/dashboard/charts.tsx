@@ -34,8 +34,8 @@ export function SparkBars({
       >
         <defs>
           <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgb(56 189 248)" stopOpacity="0.55" />
-            <stop offset="100%" stopColor="rgb(99 102 241)" stopOpacity="0.15" />
+            <stop offset="0%" stopColor="rgb(129 140 248)" stopOpacity="0.6" />
+            <stop offset="100%" stopColor="rgb(129 140 248)" stopOpacity="0.12" />
           </linearGradient>
         </defs>
         <rect
@@ -240,7 +240,7 @@ export function HorizontalBars({
             </div>
             <div className="mt-1 h-2 w-full rounded-full bg-zinc-200/70 dark:bg-zinc-800/60 overflow-hidden">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-sky-500/60 to-indigo-500/25"
+                className="h-full rounded-full bg-gradient-to-r from-indigo-400/70 to-indigo-400/30"
                 style={{ width: pct }}
                 aria-hidden="true"
               />

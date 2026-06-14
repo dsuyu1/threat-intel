@@ -34,14 +34,14 @@ export function StatCard({
         )}
       />
       <div className="relative px-4 py-3">
-        <div className="text-[11px] font-medium tracking-wide uppercase text-zinc-600 dark:text-zinc-400">
+        <div className="text-[11px] font-medium tracking-wide uppercase text-[color:var(--ti-muted)]">
           {label}
         </div>
-        <div className="mt-1 text-xl font-semibold text-zinc-900 dark:text-zinc-100 tabular-nums">
+        <div className="mt-1 text-xl font-semibold text-[color:var(--ti-fg)] tabular-nums">
           {value}
         </div>
         {hint ? (
-          <div className="mt-0.5 text-[11px] text-zinc-600 dark:text-zinc-400">
+          <div className="mt-0.5 text-[11px] text-[color:var(--ti-muted)]">
             {hint}
           </div>
         ) : null}
@@ -54,7 +54,7 @@ export function StatCard({
   return (
     <a
       href={href}
-      className="block rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-400/60 dark:focus:ring-zinc-500/60"
+      className="block rounded-[var(--ti-radius)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ti-ring)]"
     >
       {inner}
     </a>

@@ -938,10 +938,10 @@ export function FindingsDashboard({
             onChange={(e) => {
               setQuery(e.target.value);
               setPage(1);
-            }}
-            placeholder='Search "WordPress", "Termix", "CVE-2026-…"'
-            className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-4 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-600/40"
-          />
+              }}
+              placeholder='Search "WordPress", "Termix", "CVE-2026-…"'
+              className="w-full rounded-xl border border-[color:var(--ti-border)] bg-[color:var(--ti-card)] px-4 py-2 text-sm text-[color:var(--ti-fg)] placeholder:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ti-ring)]"
+            />
           <div className="flex items-center gap-2">
             <select
               value={sortKey}
@@ -949,7 +949,7 @@ export function FindingsDashboard({
                 setSortKey(normalizeSort(e.target.value));
                 setPage(1);
               }}
-              className="rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-600/40"
+              className="rounded-xl border border-[color:var(--ti-border)] bg-[color:var(--ti-card)] px-3 py-2 text-sm text-[color:var(--ti-fg)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ti-ring)]"
               aria-label="Sort by"
             >
               <option value="date">Sort: Date</option>
@@ -962,7 +962,7 @@ export function FindingsDashboard({
                 setSortDir((d) => (d === "asc" ? "desc" : "asc"));
                 setPage(1);
               }}
-              className="rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-900 transition-colors"
+              className="rounded-xl border border-[color:var(--ti-border)] bg-[color:var(--ti-card)] px-3 py-2 text-sm text-[color:var(--ti-fg)] hover:bg-white/85 dark:hover:bg-white/5 transition-colors"
               aria-label="Toggle sort direction"
               title="Toggle sort direction"
             >

@@ -74,15 +74,15 @@ export default function DataExplorerPage() {
         {CARDS.map((c) => {
           const Icon = ICONS[c.icon];
           return (
-          <a
-            key={c.href}
-            href={c.href}
-            className="block rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-400/60 dark:focus:ring-zinc-500/60"
-          >
-            <Card className="h-full hover:bg-white/80 dark:hover:bg-black/35 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
-              <CardHeader
-                title={
-                  <div className="flex items-center gap-3">
+            <a
+              key={c.href}
+              href={c.href}
+              className="block rounded-[var(--ti-radius)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ti-ring)]"
+            >
+              <Card className="h-full transition-[box-shadow,transform,border-color] hover:shadow-[var(--ti-shadow-md)] hover:border-[color:var(--ti-border)] hover:-translate-y-[1px] motion-reduce:transition-none motion-reduce:hover:translate-y-0">
+                <CardHeader
+                  title={
+                    <div className="flex items-center gap-3">
                     <Icon className="h-4 w-4 text-zinc-700 dark:text-zinc-300" aria-hidden="true" />
                     <span className="truncate">{c.title}</span>
                   </div>

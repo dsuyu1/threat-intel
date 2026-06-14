@@ -1091,7 +1091,7 @@ export default async function DashboardHome({
               <input
                 name="q"
                 placeholder="Type to search findings"
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-black/30 px-10 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                className="w-full rounded-xl border border-[color:var(--ti-border)] bg-[color:var(--ti-card)] px-10 py-2.5 text-sm text-[color:var(--ti-fg)] placeholder:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ti-ring)]"
               />
             </div>
           </form>

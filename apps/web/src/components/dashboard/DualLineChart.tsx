@@ -164,8 +164,8 @@ export function DualLineChart({
       >
         <defs>
           <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgb(79 70 229)" stopOpacity="0.16" />
-            <stop offset="100%" stopColor="rgb(79 70 229)" stopOpacity="0.03" />
+            <stop offset="0%" stopColor="rgb(129 140 248)" stopOpacity="0.16" />
+            <stop offset="100%" stopColor="rgb(129 140 248)" stopOpacity="0.03" />
           </linearGradient>
           <clipPath id={clipId}>
             <rect
@@ -196,9 +196,9 @@ export function DualLineChart({
         <g clipPath={`url(#${clipId})`}>
           {geom.area ? <path d={geom.area} fill={`url(#${fillId})`} /> : null}
           {geom.d2 ? (
-            <path d={geom.d2} fill="none" stroke="rgba(79,70,229,0.35)" strokeWidth="2" />
+            <path d={geom.d2} fill="none" stroke="rgba(52,211,153,0.85)" strokeWidth="2" />
           ) : null}
-          {geom.d1 ? <path d={geom.d1} fill="none" stroke="rgb(79 70 229)" strokeWidth="2.5" /> : null}
+          {geom.d1 ? <path d={geom.d1} fill="none" stroke="rgb(129 140 248)" strokeWidth="2.5" /> : null}
 
           {activeIdx != null && geom.p1[activeIdx] ? (
             <line
@@ -206,7 +206,7 @@ export function DualLineChart({
               x2={geom.p1[activeIdx]!.x}
               y1={geom.padT}
               y2={geom.padT + geom.innerH}
-              stroke="rgba(79,70,229,0.22)"
+              stroke="rgba(129,140,248,0.25)"
               strokeWidth="1"
             />
           ) : null}
@@ -236,15 +236,15 @@ export function DualLineChart({
             cx={geom.p1[geom.p1.length - 1]!.x}
             cy={geom.p1[geom.p1.length - 1]!.y}
             r="3.5"
-            fill="rgb(79 70 229)"
+            fill="rgb(129 140 248)"
           />
         ) : null}
 
         {activeIdx != null && geom.p1[activeIdx] ? (
           <>
-            <circle cx={geom.p1[activeIdx]!.x} cy={geom.p1[activeIdx]!.y} r="4" fill="rgb(79 70 229)" />
+            <circle cx={geom.p1[activeIdx]!.x} cy={geom.p1[activeIdx]!.y} r="4" fill="rgb(129 140 248)" />
             {secondary && geom.p2[activeIdx] ? (
-              <circle cx={geom.p2[activeIdx]!.x} cy={geom.p2[activeIdx]!.y} r="3.5" fill="rgba(79,70,229,0.55)" />
+              <circle cx={geom.p2[activeIdx]!.x} cy={geom.p2[activeIdx]!.y} r="3.5" fill="rgba(52,211,153,0.9)" />
             ) : null}
           </>
         ) : null}

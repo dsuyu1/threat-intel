@@ -3,7 +3,9 @@
 AI-powered threat intel feed — CVEs, cyberattacks, TTPs, exploits, malware.
 Hosted at [security.damianvillarreal.com](https://security.damianvillarreal.com).
 
-**Private repository — UTRGV Cybersecurity Club members only.**
+## Education pilot
+
+Generate a weekly higher-ed and K–12 threat brief, indicator CSV, blog draft, and optional newsletter draft from reviewed evidence. Use the poller integration to queue candidates and generate a retry-safe export snapshot. See the [education pilot](examples/education/README.md) for the sample run and scheduler setup.
 
 ## Stack
 

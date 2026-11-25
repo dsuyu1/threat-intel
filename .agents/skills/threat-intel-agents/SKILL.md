@@ -27,6 +27,10 @@ From repo root:
 
 All agents expect `DATABASE_URL` and may require provider keys (see `.env.example`).
 
+## Education brief
+
+Run `pnpm education:brief` from the repo root with a reviewed ledger and a new output directory. The generator is offline and independent of the scheduled agents. See `examples/education/README.md` for the input and output contract.
+
 ## How on-demand runs work (UI “Run now”)
 
 The web app endpoint `apps/web/src/app/(app)/api/agents/run/route.ts` enqueues a run by POSTing to:

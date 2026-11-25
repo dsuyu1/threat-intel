@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "education:brief": "node --import tsx src/education-brief.ts",
     "run:vuln": "tsx src/agents/vuln.ts",
     "run:vuln-scanners": "tsx src/agents/vuln-scanners.ts",
     "run:exploit": "tsx src/agents/exploit.ts",

@@ -12,7 +12,7 @@ const coverageLabels = {
   "education-advisory": "Education advisory",
 } as const;
 
-type Audience = (typeof audiences)[number];
+export type Audience = (typeof audiences)[number];
 type Coverage = keyof typeof coverageLabels;
 type Indicator = {
   kind: IocKind;
@@ -40,7 +40,7 @@ type Entry = {
 
 const audienceLabels: Record<Audience, string> = { "higher-ed": "Higher ed", "k-12": "K–12" };
 
-function object(value: unknown): Record<string, unknown> {
+export function object(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("Expected an object");
   }
@@ -65,7 +65,7 @@ function list(value: unknown, name: string): unknown[] {
   return value;
 }
 
-function date(value: unknown, name: string): string {
+export function date(value: unknown, name: string): string {
   const input = field(value, name);
   const parsed = new Date(input);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input) || !Number.isFinite(parsed.getTime()) ||
@@ -75,7 +75,7 @@ function date(value: unknown, name: string): string {
   return input;
 }
 
-function webUrl(value: unknown, name: string): string {
+export function webUrl(value: unknown, name: string): string {
   const input = field(value, name);
   const parsed = URL.canParse(input) ? new URL(input) : null;
   if (!parsed || !["https:", "http:"].includes(parsed.protocol) || parsed.username || parsed.password) {
@@ -141,14 +141,16 @@ function parseEntry(record: Record<string, unknown>): Entry {
   };
 }
 
-export function parseEducationEntries(input: string): Entry[] {
+export function parseEducationLedger(input: string) {
   const entries = new Map<string, Entry>();
+  const handledIds = new Set<string>();
   for (const [index, line] of input.split(/\r?\n/).entries()) {
     if (!line.trim()) continue;
     try {
       const record = object(JSON.parse(line));
-      const status = choice(record.status, ["draft", "approved"], "status");
+      const status = choice(record.status, ["draft", "approved", "dismissed"], "status");
       const sharing = choice(record.sharing, ["public", "restricted"], "sharing");
+      if (typeof record.id === "string") handledIds.add(record.id.trim());
       if (status !== "approved" || sharing !== "public") continue;
       const entry = parseEntry(record);
       if (entries.has(entry.id)) throw new Error(`Duplicate approved entry ID ${entry.id}`);
@@ -158,7 +160,11 @@ export function parseEducationEntries(input: string): Entry[] {
       throw new Error(`Input line ${index + 1}: ${reason}`);
     }
   }
-  return [...entries.values()];
+  return { entries: [...entries.values()], handledIds };
+}
+
+export function parseEducationEntries(input: string): Entry[] {
+  return parseEducationLedger(input).entries;
 }
 
 function offsetDate(day: string, offset: number) {

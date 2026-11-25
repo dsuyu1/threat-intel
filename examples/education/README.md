@@ -1,12 +1,18 @@
 # Education threat intelligence pilot
 
-Use the existing news poller as the intake queue. Reviewers turn relevant stories into one record per distinct incident, campaign, or advisory and reuse the same ID when new coverage appears. Keep the ledger outside the repo when it contains real operational details. The included ledger is fictional.
+Run this job against the news your server already polls. It creates a private review queue and generates all publication files from the same approved ledger. The sample files contain fictional records.
 
 ```bash
-pnpm education:brief --input examples/education/reviewed.jsonl --output /tmp/education-brief-example --week-ending 2026-11-18 --newsletter
+pnpm education:brief --input examples/education/reviewed.jsonl \
+  --feed examples/education/news.jsonl --watchlist examples/education/watchlist.json \
+  --output /tmp/education-snapshots --week-ending 2026-11-22 --newsletter
 ```
 
-Use a new output directory. Rerun with a different directory to compare revisions. The command needs the workspace dependencies and runs without database credentials or API keys.
+Each run logs the snapshot directory and intake counts. Identical reruns reuse the same snapshot. Changes create a new snapshot for that week. The job writes a complete snapshot before making it available. There are three parts:
+
+- `review-queue.jsonl` contains pending stories, suggested audiences and actions, and candidate CVEs, actor names, and IoCs when supplied or recognized. The queue is private and is outside the export directory.
+- `run.json` records read, unmatched, duplicate, already handled, and queued counts, plus the line numbers of malformed input. `exportSha256` identifies the export contents independently of changes to the review queue.
+- `exports/` contains the files below, which are generated from the reviewed ledger. Newsletter output is enabled with `--newsletter`.
 
 | File | Contents |
 | --- | --- |
@@ -14,6 +20,23 @@ Use a new output directory. Rerun with a different directory to compare revision
 | `iocs.csv` | Normalized, cited indicators from approved public entries dated through the report end, with evidence rows retained per entry and source until the indicator's review date passes |
 | `blog-draft.md` | Three highest-priority items with audience, context, action, and citations |
 | `newsletter-draft.md` | Optional short digest of the same highlights, generated with `--newsletter` |
+
+## Connect your poller
+
+- Export a rolling JSON Lines file with the UTC publication `date` (`YYYY-MM-DD`), `url`, and `title`. Optional fields are `excerpt`, `actorCandidates` (an array of names from the source), and `iocCandidates` (an array of explicitly identified domains, IPs, URLs, or hashes). The script recognizes CVE IDs in titles and excerpts and normalizes supplied indicator values. The queue records candidates as leads for review.
+- Include open items in the rolling export until they receive a disposition. Write the feed to a temporary file and rename it over the previous version when complete. At intake, the first eligible copy of each canonical URL wins. Feed updates that need to replace earlier source text should replace those rows in the upstream export. The job strips common tracking parameters and URL fragments while retaining other query parameters.
+- Configure an optional JSON array of product names with their audiences, following `watchlist.json`. Security terms combined with an education signal or product match create a candidate. Broad education mentions may require the reviewer to assign an audience. Review unmatched counts as you tune terms and source coverage.
+- Start with an empty reviewed ledger, or use the included fictional one for a dry run. Move a candidate into the ledger under the same ID when a reviewer takes ownership. Add a record with that ID, `status: dismissed` and `sharing: restricted` to keep irrelevant items out of the queue on later runs. When consolidating approved public coverage, include each source URL on the approved record so the same articles stay out of the queue.
+
+Run the command after the poller's normal refresh, or schedule it on the server. When `--week-ending` is omitted in feed mode, the generator uses the most recently completed Sunday in UTC. Pass an explicit date for a backfill. A cron entry for an installation under `/opt/threat-intel` with `pnpm` on the job's PATH can look like this:
+
+```cron
+*/30 * * * * cd /opt/threat-intel && pnpm education:brief --input /var/lib/education-intel/reviewed.jsonl --feed /var/lib/education-intel/news.jsonl --watchlist /var/lib/education-intel/watchlist.json --output /var/lib/education-intel/snapshots --newsletter
+```
+
+Feed and reviewed ledger paths should live outside the checkout and webroot. A publishing integration should consume only `exports/` and track the export hash for each reporting period. Malformed feed rows are counted and skipped. Missing files, invalid watchlists, and invalid review records fail the run before it exposes a snapshot.
+
+To render directly from the ledger, omit `--feed` and pass a new output directory and an explicit `--week-ending`. The command requires the workspace dependencies and runs without database credentials or API keys.
 
 ## Review ledger
 
@@ -32,11 +55,11 @@ The input is JSON Lines, with one JSON object per line. The generator reads reco
 
 Counts describe reviewed public reporting. Compare source coverage before interpreting week-to-week movement. Inspect the evidence for indicator matches in the SIEM or EDR before taking action.
 
-## What to build next
+## Next automation steps
 
-1. **Feed the review queue.** Map your poller's URL, source, published date, and title into draft records. Upsert by canonical URL at intake. Group multiple sources on one reviewed record after a human confirms they describe the same event.
-2. **Add product watchlists.** Use separate higher-ed and K–12 profiles in the existing watchlist workflow. Start with identity, remote access, student information and learning systems, plus research infrastructure for campuses. Match public vendor notices and CISA KEV entries to products that the institution uses.
-3. **Add a review page.** Reuse the site's source and actor data for candidate links. Record approval and corrections with timestamps and author identity. Start with one campus and one district reviewer, and measure time to review, usefulness of recommended actions, and indicator matches that lead to triage.
-4. **Publish from the same record set.** Archive approved reports and drafts on a dedicated education landing page. Add email delivery after you have an audience and a publishing cadence. Leave the existing generic agents and paid features out of the education pilot's scheduled jobs.
+1. **Reduce review time.** Reuse the existing ingestion and actor data to suggest related coverage and prefill a source-cited summary. Keep the editor's approval on targeting claims, attribution, and IoC redistribution.
+2. **Enrich matching advisories.** Look up CVE candidates in CISA KEV and fetch affected versions from primary vendor advisories. Use the existing watchlist and project context to route follow-up to the relevant team.
+3. **Wire publishing destinations.** Publish an approved release automatically to the education archive, with per-period and per-destination delivery records. Use the same release for the opt-in newsletter. Retry transient failures and use provider idempotency where available.
+4. **Measure the pilot.** Start with one campus and one district. Track review time, useful alerts, corrections, and indicators that lead to triage.
 
 Starting sources include the [REN-ISAC public alerts](https://www.ren-isac.net/services/publications/alerts/index.html), the [CISA KEV catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog), and public advisories from vendors on your product watchlists. CISA's [K–12 report](https://www.cisa.gov/sites/default/files/2023-01/K-12report_FINAL_V2_508c.pdf) provides context for the pilot's district priorities.

@@ -1,0 +1,4 @@
+{"date":"2026-11-18","url":"https://example.org/advisories/campus-exercise?utm_source=demo","title":"Exercise: campus account takeover reports"}
+{"date":"2026-11-19","url":"https://example.org/advisories/roster-alert?utm_source=demo","title":"Exercise: ExampleRoster vendor advisory for CVE-2099-12345","excerpt":"This fictional advisory is a sample for testing district exposure triage.","iocCandidates":["login-training.example"]}
+{"date":"2026-11-19","url":"https://example.org/advisories/roster-alert#summary","title":"Exercise: ExampleRoster vendor advisory for CVE-2099-12345"}
+{"date":"2026-11-20","url":"https://example.org/updates/campus-library","title":"Campus library expands its opening hours"}

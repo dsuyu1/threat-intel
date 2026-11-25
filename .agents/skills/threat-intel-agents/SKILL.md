@@ -29,7 +29,7 @@ All agents expect `DATABASE_URL` and may require provider keys (see `.env.exampl
 
 ## Education brief
 
-Run `pnpm education:brief` from the repo root with a reviewed ledger and a new output directory. The generator is offline and independent of the scheduled agents. See `examples/education/README.md` for the input and output contract.
+Run `pnpm education:brief` from the repo root with a reviewed ledger and a new output directory. Pass `--feed` to process a poller export into a private review queue and create a retry-safe snapshot. With `--feed`, omit `--week-ending` to use the last completed Sunday in UTC. The job is offline and independent of the scheduled agents. See `examples/education/README.md` for the input and output contract.
 
 ## How on-demand runs work (UI “Run now”)
 

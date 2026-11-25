@@ -1,0 +1,4 @@
+[
+  { "product": "ExampleRoster", "audiences": ["k-12"] },
+  { "product": "Example Campus SSO", "audiences": ["higher-ed"] }
+]
